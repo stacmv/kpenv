@@ -1,0 +1,39 @@
+{
+  "name": "local/keepass-env-manager",
+  "description": "KeePass-based environment file (.env) manager for secure development workflows",
+  "type": "project",
+  "license": "MIT",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Human + Claude",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": ">=8.2"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0",
+    "phpstan/phpstan": "^1.10"
+  },
+  "autoload": {
+    "psr-4": {
+      "KpEnv\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "KpEnv\\Tests\\": "tests/"
+    }
+  },
+  "bin": ["kpenv"],
+  "keywords": [
+    "keepass",
+    "environment",
+    "dotenv",
+    "secrets",
+    "security",
+    "cli"
+  ]
+}

@@ -1,0 +1,304 @@
+#!/usr/bin/env php
+<?php
+/**
+ * kpenv - KeePass-based environment file manager
+ *
+ * Manages .env files by syncing with KeePassXC password manager
+ *
+ * @author Human + Claude collaboration
+ * @license MIT
+ * @version 1.0.0
+ */
+
+declare(strict_types=1);
+
+// --- Configuration ---
+$baseDevFolder = "/home/stac/dev";
+$keepassDb = getenv("HOME") . "/Documents/work-secrets.kdbx";
+$envExampleFile = ".env.example";
+$defaultEnv = "development";
+
+// --- Main Execution ---
+main($argc, $argv);
+
+class KeePassXCService
+{
+    private string $dbPath;
+    private string $password;
+    private string $cliPath;
+
+    public function __construct(string $dbPath, string $password)
+    {
+        $this->dbPath = $dbPath;
+        $this->password = $password;
+
+        $this->cliPath = trim(shell_exec('command -v keepassxc-cli'));
+        if (empty($this->cliPath) || !is_executable($this->cliPath)) {
+            throw new Exception("KeePassXC-CLI executable not found or not executable.");
+        }
+
+        if (!file_exists($this->dbPath)) {
+            throw new Exception("KeePass database not found at {$this->dbPath}");
+        }
+    }
+
+    public function getEntryNotes(string $entryPath): ?string
+    {
+        $result = $this->execute(["show", "--attributes", "Notes", $this->dbPath, $entryPath]);
+        if ($result['exit_code'] !== 0) {
+            return null;
+        }
+        return $result['stdout'];
+    }
+
+    public function setEntryNotes(string $entryPath, string $notesContent): bool
+    {
+        $groupPath = dirname($entryPath);
+        $this->ensureGroupExists($groupPath);
+
+        $check = $this->execute(["show", "-q", $this->dbPath, $entryPath]);
+
+        if ($check['exit_code'] !== 0) {
+            $result = $this->execute(["add", "-u", "env", "--notes", "\n\n" . $notesContent, $this->dbPath, $entryPath]);
+        } else {
+            $result = $this->execute(["edit", "--notes", $notesContent, $this->dbPath, $entryPath]);
+        }
+        
+        if ($result['exit_code'] !== 0) {
+            echo "KeePassXC-CLI Error: " . $result['stderr'] . "\n";
+            return false;
+        }
+        return true;
+    }
+
+    private function ensureGroupExists(string $groupPath): void
+    {
+        if ($groupPath === '.' || $groupPath === '/') return;
+        $result = $this->execute(["ls", $this->dbPath, $groupPath]);
+        if ($result['exit_code'] !== 0) {
+            $this->execute(["mkdir", $this->dbPath, $groupPath]);
+        }
+    }
+
+    private function execute(array $commandParts, string $stdin = ""): array
+    {
+        $command = array_merge([$this->cliPath], $commandParts);
+        $descriptorSpec = [
+            0 => ["pipe", "r"], 
+            1 => ["pipe", "w"], 
+            2 => ["pipe", "w"], 
+        ];
+
+        $process = proc_open($command, $descriptorSpec, $pipes);
+
+        if (is_resource($process)) {
+            fwrite($pipes[0], $this->password . "\n");
+            if (!empty($stdin)) {
+                fwrite($pipes[0], $stdin);
+            }
+            fclose($pipes[0]);
+
+            $stdout = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+
+            $exitCode = proc_close($process);
+
+            return ['stdout' => trim($stdout), 'stderr' => trim($stderr), 'exit_code' => $exitCode];
+        }
+        throw new Exception("Failed to run keepassxc-cli");
+    }
+}
+
+function main(int $argc, array $argv): void
+{
+    global $defaultEnv, $keepassDb;
+
+    if ($argc < 2) {
+        show_help();
+        exit(1);
+    }
+
+    $subcommand = $argv[1];
+    $options = getopt("", ["env::", "password::"]);
+    $env = $options['env'] ?? $defaultEnv;
+    
+    $projectName = get_project_name();
+    if ($projectName === null) {
+        echo "Error: Could not determine project name from current directory.\n";
+        exit(1);
+    }
+
+    switch ($subcommand) {
+        case 'sync-example':
+            sync_example_locally($env);
+            break;
+        case 'backup-env':
+        case 'restore-env':
+            // These commands require a password
+            $password = getenv('KEEPASS_PASSWORD') ?: ($options['password'] ?? null);
+            if ($password === null || $password === false) {
+                echo "KeePass database password: ";
+                $password = trim(shell_exec('stty -echo; read password; stty echo; echo $password'));
+                echo "\n";
+            }
+            if (empty($password)) {
+                echo "Error: Password cannot be empty.\n";
+                exit(1);
+            }
+            try {
+                $kpService = new KeePassXCService($keepassDb, $password);
+            } catch (Exception $e) {
+                echo "Error: " . $e->getMessage() . "\n";
+                exit(1);
+            }
+
+            if ($subcommand === 'backup-env') {
+                backup_env_to_keepass($kpService, $projectName, $env);
+            } else {
+                restore_env_from_keepass($kpService, $projectName, $env);
+            }
+            break;
+        case 'help':
+        case '-h':
+        case '--help':
+            show_help();
+            break;
+        default:
+            echo "Error: Unknown subcommand '$subcommand'\n";
+            show_help();
+            exit(1);
+    }
+}
+
+function parse_env_file(string $filePath): array {
+    if (!file_exists($filePath)) return [];
+    $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $vars = [];
+    foreach ($lines as $line) {
+        if (str_starts_with(trim($line), '#')) continue;
+        if (strpos($line, '=') !== false) {
+            list($key) = explode('=', $line, 2);
+            $vars[trim($key)] = true;
+        }
+    }
+    return $vars;
+}
+
+function sync_example_locally(string $env): void {
+    global $envExampleFile, $defaultEnv;
+    $envFile = (".env");
+    if ($env !== $defaultEnv) {
+        $envFile = ".env.$env";
+    }
+
+    if (!file_exists($envExampleFile)) {
+        echo "Error: Example file not found: $envExampleFile\n";
+        exit(1);
+    }
+
+    echo "Syncing $envExampleFile with local $envFile...\n";
+
+    $exampleVars = parse_env_file($envExampleFile);
+    $localVars = parse_env_file($envFile);
+    $addedCount = 0;
+
+    $handle = fopen($envFile, 'a');
+
+    foreach ($exampleVars as $key => $_) {
+        if (!isset($localVars[$key])) {
+            echo "New key '$key' found. Enter value: ";
+            $value = trim(fgets(STDIN));
+            fwrite($handle, "$key=\"" . addslashes($value) . "\"\n");
+            $addedCount++;
+        }
+    }
+
+    fclose($handle);
+    echo "Sync completed. $addedCount keys added to $envFile.\n";
+}
+
+function backup_env_to_keepass(KeePassXCService $kp, string $project, string $env): void
+{
+    global $defaultEnv;
+    $envFile = (".env");
+    if ($env !== $defaultEnv) {
+        $envFile = ".env.$env";
+    }
+
+    if (!file_exists($envFile)) {
+        echo "Error: Environment file not found: $envFile\n";
+        exit(1);
+    }
+
+    $notesContent = file_get_contents($envFile);
+    $entryPath = "$project/$env";
+
+    echo "Backing up content of $envFile to KeePass entry '$entryPath'...\n";
+
+    if ($kp->setEntryNotes($entryPath, $notesContent)) {
+        echo "Successfully backed up environment to KeePass notes.\n";
+    } else {
+        echo "Error: Failed to backup environment to KeePass.\n";
+        exit(1);
+    }
+}
+
+function restore_env_from_keepass(KeePassXCService $kp, string $project, string $env): void
+{
+    global $defaultEnv;
+    $envFile = (".env");
+    if ($env !== $defaultEnv) {
+        $envFile = ".env.$env";
+    }
+
+    echo "Restoring environment from KeePass for project '$project' environment '$env'...\n";
+
+    $entryPath = "$project/$env";
+    $notesContent = $kp->getEntryNotes($entryPath);
+
+    if ($notesContent === null) {
+        echo "Error: Entry '$entryPath' not found or password incorrect.\n";
+        exit(1);
+    }
+
+    if (file_exists($envFile)) {
+        $fetchedFile = "$envFile.fetched";
+        echo "Warning: Local file '$envFile' already exists.\n";
+        echo "Saving content from KeePass to '$fetchedFile' instead.\n";
+        file_put_contents($fetchedFile, $notesContent);
+    } else {
+        file_put_contents($envFile, $notesContent);
+        echo "Generated $envFile successfully!\n";
+    }
+}
+
+function get_project_name(): ?string
+{
+    global $baseDevFolder;
+    $currentDir = getcwd();
+    if (strpos($currentDir, $baseDevFolder) !== 0) {
+        return null;
+    }
+    $projectPath = substr($currentDir, strlen($baseDevFolder) + 1);
+    return empty($projectPath) ? null : $projectPath;
+}
+
+function show_help(): void
+{
+    global $baseDevFolder, $keepassDb;
+    echo "Usage: php env-manager.php <subcommand> [--env=<environment>] [--password=<password>]\n\n";
+    echo "Environment management tool using KeePassXC\n\n";
+    echo "Subcommands:\n";
+    echo "  sync-example    Create or update local .env file from .env.example\n";
+    echo "  backup-env      Backup a local .env file to the notes of a KeePass entry\n";
+    echo "  restore-env     Restore .env file from the notes of a KeePass entry\n\n";
+    echo "Options:\n";
+    echo "  --env=<env>     Optional environment name (default: development)\n";
+    echo "  --password=<pw> Optional database password (or use KEEPASS_PASSWORD env var)\n\n";
+    echo "Configuration:\n";
+    echo "  Base folder:  $baseDevFolder\n";
+    echo "  KeePass DB:   $keepassDb\n";
+}
