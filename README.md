@@ -1,6 +1,6 @@
 # kpenv - KeePass Environment Manager
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **License:** MIT
 **Author:** Human + Claude collaboration
 
@@ -26,11 +26,15 @@
 
 ## Features
 
-✅ **Sync from Example** - Interactively create `.env` from `.env.example`
+✅ **Easy Installation** - One-command installation script
+✅ **Project Initialization** - `kpenv init` sets up projects automatically
+✅ **Auto .gitignore** - Ensures `.env` files are never committed
+✅ **Flexible Configuration** - User and project-level JSON configs
+✅ **Sync from Example** - Interactively create `.env` from example files
 ✅ **Backup to KeePass** - Store environment files in KeePass database notes
 ✅ **Restore from KeePass** - Retrieve environment files on new machines
-✅ **Auto Project Detection** - Detects project name from directory path
-✅ **Multi-Environment** - Support for `.env`, `.env.staging`, `.env.production`
+✅ **Auto Project Detection** - Smart project name detection from git/path
+✅ **Multi-Environment** - Support for development, staging, production
 ✅ **Secure** - Password never stored, read from stdin or env var
 ✅ **Safe Restore** - Creates `.env.fetched` if local `.env` exists
 
@@ -44,54 +48,123 @@
 
 ### Installation
 
+#### Quick Install (Recommended)
+
 ```bash
-# Install KeePassXC (includes CLI)
+# Clone or download the repository
+git clone https://github.com/stacmv/env-manager.git
+cd env-manager
+
+# Run installer
+./install.sh
+```
+
+The installer will:
+- ✅ Check PHP 8.2+ is installed
+- ✅ Check for KeePassXC CLI
+- ✅ Install `kpenv` to `/usr/local/bin`
+- ✅ Create `~/.kpenv/config.json` with defaults
+- ✅ Make kpenv globally available
+
+#### Manual Installation
+
+```bash
+# 1. Install dependencies
 # Ubuntu/Debian
-sudo apt install keepassxc
+sudo apt install php-cli keepassxc
 
 # macOS
-brew install keepassxc
+brew install php keepassxc
 
-# Verify keepassxc-cli is available
-which keepassxc-cli
+# 2. Copy kpenv to PATH
+sudo cp kpenv /usr/local/bin/kpenv
+sudo chmod +x /usr/local/bin/kpenv
 
-# Make kpenv executable
-chmod +x kpenv
+# 3. Create config directory
+mkdir -p ~/.kpenv
 
-# Optional: Add to PATH
-ln -s $(pwd)/kpenv /usr/local/bin/kpenv
+# 4. Create default config
+cat > ~/.kpenv/config.json <<EOF
+{
+  "base_dev_folder": "$HOME/dev",
+  "keepass_db": "$HOME/Documents/work-secrets.kdbx",
+  "default_env": "development",
+  "example_files": [".env.example", "env.example", ".env.dist"],
+  "auto_gitignore": true
+}
+EOF
+```
+
+#### Uninstallation
+
+```bash
+./uninstall.sh
 ```
 
 ---
 
 ## Usage
 
-### Configuration
+### Commands
 
-Edit the configuration at the top of `kpenv`:
+#### 0. Initialize Project (New!)
 
-```php
-$baseDevFolder = "/home/username/dev";  // Your projects folder
-$keepassDb = getenv("HOME") . "/Documents/secrets.kdbx";  // KeePass DB path
-$defaultEnv = "development";  // Default environment name
+Set up kpenv in your project directory:
+
+```bash
+kpenv init
 ```
 
-### Commands
+This command will:
+- ✅ Detect your project name from git or directory
+- ✅ Find `.env.example` or other example files
+- ✅ Check if `.env` is in `.gitignore` (and add it if not)
+- ✅ Create `.kpenv.json` project configuration
+- ✅ Optionally sync `.env.example` to `.env`
+
+**Example:**
+```
+$ cd my-project
+$ kpenv init
+
+🔧 Initializing kpenv in current project...
+
+Project detected: my-project
+Current directory: /home/user/dev/my-project
+
+✓ Found .env.example
+✓ .env does not exist (will be created)
+✓ KeePass database: /home/user/Documents/work-secrets.kdbx
+✓ keepassxc-cli found
+
+Checking .gitignore...
+⚠ .env not found in .gitignore
+
+Add .env to .gitignore? [Y/n]: y
+✓ Added .env to .gitignore
+
+Create .kpenv.json config? [Y/n]: y
+✓ Created .kpenv.json
+
+Sync .env.example to .env now? [Y/n]: y
+
+✅ Project initialized successfully!
+```
 
 #### 1. Sync from Example
 
 Create or update `.env` from `.env.example` with interactive prompts:
 
 ```bash
-./kpenv sync-example
+kpenv sync-example
 
 # With specific environment
-./kpenv sync-example --env=staging
+kpenv sync-example --env=staging
 ```
 
 **Example:**
 ```
-$ ./kpenv sync-example
+$ kpenv sync-example
 Syncing .env.example with local .env...
 New key 'DATABASE_HOST' found. Enter value: localhost
 New key 'DATABASE_PASSWORD' found. Enter value: ********
@@ -103,13 +176,13 @@ Sync completed. 2 keys added to .env.
 Backup your `.env` file to KeePass:
 
 ```bash
-./kpenv backup-env
+kpenv backup-env
 
 # With password from environment variable
-KEEPASS_PASSWORD=mypass ./kpenv backup-env
+KEEPASS_PASSWORD=mypass kpenv backup-env
 
 # With specific environment
-./kpenv backup-env --env=production
+kpenv backup-env --env=production
 ```
 
 **What happens:**
@@ -122,13 +195,13 @@ KEEPASS_PASSWORD=mypass ./kpenv backup-env
 Restore `.env` file from KeePass on a new machine:
 
 ```bash
-./kpenv restore-env
+kpenv restore-env
 
 # With password as argument (less secure)
-./kpenv restore-env --password=mypass
+kpenv restore-env --password=mypass
 
 # Specific environment
-./kpenv restore-env --env=staging
+kpenv restore-env --env=staging
 ```
 
 **What happens:**
@@ -138,17 +211,94 @@ Restore `.env` file from KeePass on a new machine:
 
 ---
 
-## Workflow Example
+## Configuration
+
+kpenv uses a hierarchical configuration system:
+
+**Priority (highest to lowest):**
+1. CLI arguments (`--env=production`)
+2. Environment variables (`KPENV_DB`, `KPENV_BASE_FOLDER`)
+3. Project config (`.kpenv.json`)
+4. User config (`~/.kpenv/config.json`)
+5. Defaults
+
+### User Configuration
+
+Location: `~/.kpenv/config.json`
+
+```json
+{
+  "base_dev_folder": "/home/username/dev",
+  "keepass_db": "/home/username/Documents/work-secrets.kdbx",
+  "default_env": "development",
+  "example_files": [
+    ".env.example",
+    "env.example",
+    ".env.dist",
+    "example.env"
+  ],
+  "auto_gitignore": true
+}
+```
+
+**Options:**
+- `base_dev_folder` - Base directory for project detection
+- `keepass_db` - Path to KeePass database file
+- `default_env` - Default environment name (development, staging, production)
+- `example_files` - List of example file names to search for (in order)
+- `auto_gitignore` - Automatically add `.env` to `.gitignore` during init
+
+### Project Configuration
+
+Location: `.kpenv.json` (in project root)
+
+Created automatically by `kpenv init`, or create manually:
+
+```json
+{
+  "project_name": "my-awesome-app",
+  "example_file": ".env.example",
+  "environments": [
+    "development",
+    "staging",
+    "production"
+  ]
+}
+```
+
+**Options:**
+- `project_name` - Explicit project name (overrides auto-detection)
+- `example_file` - Specific example file to use
+- `environments` - List of available environments
+
+### Environment Variables
+
+Override configuration on-the-fly:
+
+```bash
+# Override KeePass database path
+KPENV_DB=/path/to/other.kdbx kpenv backup-env
+
+# Override base folder
+KPENV_BASE_FOLDER=/home/user/projects kpenv sync-example
+
+# Pass KeePass password (non-interactive)
+KEEPASS_PASSWORD=mypassword kpenv restore-env
+```
+
+---
+
+## Workflow Examples
 
 ### Initial Setup (Developer A)
 
 ```bash
-# 1. Create .env from example
-./kpenv sync-example
-# Interactively fill in values
+# 1. Initialize project
+kpenv init
+# This will guide you through setup
 
 # 2. Backup to KeePass
-./kpenv backup-env
+kpenv backup-env
 # Enter KeePass password when prompted
 ```
 
@@ -160,7 +310,7 @@ git clone https://github.com/username/project.git
 cd project
 
 # 2. Restore .env from KeePass
-./kpenv restore-env
+kpenv restore-env
 # Enter KeePass password when prompted
 
 # 3. Ready to work!
@@ -170,16 +320,16 @@ cd project
 
 ```bash
 # Development environment
-./kpenv backup-env --env=development
+kpenv backup-env --env=development
 
 # Staging environment
-./kpenv backup-env --env=staging
+kpenv backup-env --env=staging
 
 # Production environment
-./kpenv backup-env --env=production
+kpenv backup-env --env=production
 
 # Restore specific environment
-./kpenv restore-env --env=production
+kpenv restore-env --env=production
 ```
 
 ---
@@ -187,21 +337,34 @@ cd project
 ## Project Structure
 
 ```
-keepass-env-manager/
-├── kpenv                     # Main executable
-├── README.md                 # This file
-├── LICENSE                   # MIT License
-├── composer.json             # PHP package metadata
+env-manager/
+├── kpenv                          # Main executable
+├── install.sh                     # Installation script
+├── uninstall.sh                   # Uninstallation script
+├── README.md                      # This file
+├── LICENSE                        # MIT License
+├── DISTRIBUTION_STRATEGY.md       # Distribution plan
+├── composer.json                  # PHP package metadata
 ├── docs/
-│   ├── prd.md               # Product Requirements Document
-│   └── planning/            # Planning Framework
+│   ├── prd.md                    # Product Requirements Document
+│   └── planning/                 # Planning Framework
 │       ├── FRAMEWORK.md
 │       ├── implementation-plan.md
 │       ├── session-log.md
 │       └── decisions.md
 ├── examples/
-│   └── .env.example         # Example environment file
-└── tests/                   # Future: PHPUnit tests
+│   └── .env.example              # Example environment file
+└── tests/                        # Future: PHPUnit tests
+```
+
+### User Files (created on install)
+
+```
+~/.kpenv/
+└── config.json                    # User configuration
+
+your-project/
+└── .kpenv.json                    # Project configuration (created by init)
 ```
 
 ---
@@ -301,23 +464,31 @@ $baseDevFolder = "/home/username/dev";
 
 ## Roadmap
 
-### Version 1.0 (Current - Complete ✅)
+### Version 1.0 (Complete ✅)
 - [x] Core sync/backup/restore functionality
 - [x] Multi-environment support
 - [x] Interactive prompts
 - [x] Safe restore mode
 - [x] Auto project detection
 
-### Version 1.1 (Planned)
+### Version 1.1 (Current - Complete ✅)
+- [x] Installation script (`install.sh`)
+- [x] Configuration system (JSON-based)
+- [x] `kpenv init` command
+- [x] Auto .gitignore management
+- [x] Smart project name detection
+- [x] Global PATH installation
+
+### Version 1.2 (Planned)
 - [ ] List all backed-up projects (`list` command)
 - [ ] Diff local vs KeePass (`diff` command)
-- [ ] Config file support (`kpenv.json`)
 - [ ] PHPUnit test suite
 - [ ] CI/CD integration
+- [ ] Composer package distribution
 
 ### Version 2.0 (Future)
 - [ ] Refactor to PSR-4 classes
-- [ ] Composer package distribution
+- [ ] APT/Homebrew packages
 - [ ] Plugin system for other backends (1Password, Bitwarden)
 - [ ] GUI wrapper (Electron/Tauri)
 
