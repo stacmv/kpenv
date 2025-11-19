@@ -7,19 +7,141 @@
  *
  * @author Human + Claude collaboration
  * @license MIT
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 declare(strict_types=1);
 
-// --- Configuration ---
-$baseDevFolder = "/home/stac/dev";
-$keepassDb = getenv("HOME") . "/Documents/work-secrets.kdbx";
-$envExampleFile = ".env.example";
-$defaultEnv = "development";
-
 // --- Main Execution ---
 main($argc, $argv);
+
+class Config
+{
+    private array $config;
+
+    private const DEFAULTS = [
+        'base_dev_folder' => null, // Will use HOME/dev
+        'keepass_db' => null, // Will use HOME/Documents/work-secrets.kdbx
+        'default_env' => 'development',
+        'example_files' => ['.env.example', 'env.example', '.env.dist', 'example.env'],
+        'auto_gitignore' => true,
+    ];
+
+    public function __construct()
+    {
+        $this->config = $this->loadConfig();
+    }
+
+    private function loadConfig(): array
+    {
+        // Start with defaults
+        $config = self::DEFAULTS;
+
+        // Apply default paths if not set
+        $homeDir = getenv('HOME') ?: '/root';
+        if ($config['base_dev_folder'] === null) {
+            $config['base_dev_folder'] = $homeDir . '/dev';
+        }
+        if ($config['keepass_db'] === null) {
+            $config['keepass_db'] = $homeDir . '/Documents/work-secrets.kdbx';
+        }
+
+        // Load user config (~/.kpenv/config.json)
+        $userConfigPath = $homeDir . '/.kpenv/config.json';
+        if (file_exists($userConfigPath)) {
+            $userConfig = json_decode(file_get_contents($userConfigPath), true);
+            if (is_array($userConfig)) {
+                $config = array_merge($config, $userConfig);
+            }
+        }
+
+        // Load project config (.kpenv.json in current directory)
+        $projectConfigPath = getcwd() . '/.kpenv.json';
+        if (file_exists($projectConfigPath)) {
+            $projectConfig = json_decode(file_get_contents($projectConfigPath), true);
+            if (is_array($projectConfig)) {
+                $config = array_merge($config, $projectConfig);
+            }
+        }
+
+        // Environment variables override
+        if ($db = getenv('KPENV_DB')) {
+            $config['keepass_db'] = $db;
+        }
+        if ($base = getenv('KPENV_BASE_FOLDER')) {
+            $config['base_dev_folder'] = $base;
+        }
+
+        return $config;
+    }
+
+    public function get(string $key, $default = null)
+    {
+        return $this->config[$key] ?? $default;
+    }
+
+    public function set(string $key, $value): void
+    {
+        $this->config[$key] = $value;
+    }
+
+    public function getAll(): array
+    {
+        return $this->config;
+    }
+
+    public static function createUserConfig(): bool
+    {
+        $homeDir = getenv('HOME') ?: '/root';
+        $configDir = $homeDir . '/.kpenv';
+        $configFile = $configDir . '/config.json';
+
+        // Create directory if it doesn't exist
+        if (!is_dir($configDir)) {
+            if (!mkdir($configDir, 0755, true)) {
+                return false;
+            }
+        }
+
+        // Don't overwrite existing config
+        if (file_exists($configFile)) {
+            return true;
+        }
+
+        $defaultConfig = [
+            'base_dev_folder' => $homeDir . '/dev',
+            'keepass_db' => $homeDir . '/Documents/work-secrets.kdbx',
+            'default_env' => 'development',
+            'example_files' => ['.env.example', 'env.example', '.env.dist', 'example.env'],
+            'auto_gitignore' => true,
+        ];
+
+        $json = json_encode($defaultConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return file_put_contents($configFile, $json) !== false;
+    }
+
+    public static function createProjectConfig(string $projectName, ?string $exampleFile = null): bool
+    {
+        $configFile = getcwd() . '/.kpenv.json';
+
+        // Don't overwrite existing config
+        if (file_exists($configFile)) {
+            return true;
+        }
+
+        $projectConfig = [
+            'project_name' => $projectName,
+            'environments' => ['development', 'staging', 'production'],
+        ];
+
+        if ($exampleFile !== null) {
+            $projectConfig['example_file'] = $exampleFile;
+        }
+
+        $json = json_encode($projectConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return file_put_contents($configFile, $json) !== false;
+    }
+}
 
 class KeePassXCService
 {
@@ -114,29 +236,34 @@ class KeePassXCService
 
 function main(int $argc, array $argv): void
 {
-    global $defaultEnv, $keepassDb;
+    $config = new Config();
 
     if ($argc < 2) {
-        show_help();
+        show_help($config);
         exit(1);
     }
 
     $subcommand = $argv[1];
     $options = getopt("", ["env::", "password::"]);
-    $env = $options['env'] ?? $defaultEnv;
-    
-    $projectName = get_project_name();
-    if ($projectName === null) {
-        echo "Error: Could not determine project name from current directory.\n";
-        exit(1);
-    }
+    $env = $options['env'] ?? $config->get('default_env');
 
     switch ($subcommand) {
+        case 'init':
+            init_project($config);
+            break;
         case 'sync-example':
-            sync_example_locally($env);
+            $projectName = get_project_name($config);
+            sync_example_locally($config, $env);
             break;
         case 'backup-env':
         case 'restore-env':
+            $projectName = get_project_name($config);
+            if ($projectName === null) {
+                echo "Error: Could not determine project name from current directory.\n";
+                echo "Run 'kpenv init' to set up this project.\n";
+                exit(1);
+            }
+
             // These commands require a password
             $password = getenv('KEEPASS_PASSWORD') ?: ($options['password'] ?? null);
             if ($password === null || $password === false) {
@@ -149,6 +276,7 @@ function main(int $argc, array $argv): void
                 exit(1);
             }
             try {
+                $keepassDb = $config->get('keepass_db');
                 $kpService = new KeePassXCService($keepassDb, $password);
             } catch (Exception $e) {
                 echo "Error: " . $e->getMessage() . "\n";
@@ -156,21 +284,156 @@ function main(int $argc, array $argv): void
             }
 
             if ($subcommand === 'backup-env') {
-                backup_env_to_keepass($kpService, $projectName, $env);
+                backup_env_to_keepass($kpService, $projectName, $env, $config);
             } else {
-                restore_env_from_keepass($kpService, $projectName, $env);
+                restore_env_from_keepass($kpService, $projectName, $env, $config);
             }
             break;
         case 'help':
         case '-h':
         case '--help':
-            show_help();
+            show_help($config);
             break;
         default:
             echo "Error: Unknown subcommand '$subcommand'\n";
-            show_help();
+            show_help($config);
             exit(1);
     }
+}
+
+function init_project(Config $config): void
+{
+    echo "🔧 Initializing kpenv in current project...\n\n";
+
+    // Ensure user config exists
+    Config::createUserConfig();
+
+    // Detect project name
+    $currentDir = getcwd();
+    $projectName = basename($currentDir);
+
+    // Try to get better project name from git
+    if (file_exists('.git') && is_dir('.git')) {
+        $gitRemote = trim(shell_exec('git remote get-url origin 2>/dev/null') ?: '');
+        if (!empty($gitRemote)) {
+            // Extract repo name from git URL
+            if (preg_match('#/([^/]+?)(?:\.git)?$#', $gitRemote, $matches)) {
+                $projectName = $matches[1];
+            }
+        }
+    }
+
+    echo "Project detected: $projectName\n";
+    echo "Current directory: $currentDir\n\n";
+
+    // Detect example file
+    $exampleFiles = $config->get('example_files', ['.env.example']);
+    $exampleFile = null;
+    foreach ($exampleFiles as $candidate) {
+        if (file_exists($candidate)) {
+            $exampleFile = $candidate;
+            break;
+        }
+    }
+
+    if ($exampleFile) {
+        echo "✓ Found $exampleFile\n";
+    } else {
+        echo "⚠ No example file found (tried: " . implode(', ', $exampleFiles) . ")\n";
+    }
+
+    // Check if .env exists
+    $envExists = file_exists('.env');
+    if ($envExists) {
+        echo "✓ .env already exists\n";
+    } else {
+        echo "✓ .env does not exist (will be created)\n";
+    }
+
+    // Check KeePass database
+    $keepassDb = $config->get('keepass_db');
+    echo "✓ KeePass database: $keepassDb\n";
+
+    // Check keepassxc-cli
+    $cliPath = trim(shell_exec('command -v keepassxc-cli 2>/dev/null') ?: '');
+    if (empty($cliPath)) {
+        echo "⚠ Warning: keepassxc-cli not found. Install KeePassXC to use backup/restore features.\n";
+    } else {
+        echo "✓ keepassxc-cli found: $cliPath\n";
+    }
+
+    echo "\n";
+
+    // Check and update .gitignore
+    if ($config->get('auto_gitignore', true)) {
+        echo "Checking .gitignore...\n";
+        $gitignoreNeedsUpdate = true;
+
+        if (file_exists('.gitignore')) {
+            $gitignoreContent = file_get_contents('.gitignore');
+            // Check if .env is already in gitignore
+            if (preg_match('/^\.env$/m', $gitignoreContent) || preg_match('/^\/\.env$/m', $gitignoreContent)) {
+                echo "✓ .env already in .gitignore\n";
+                $gitignoreNeedsUpdate = false;
+            }
+        }
+
+        if ($gitignoreNeedsUpdate) {
+            echo "⚠ .env not found in .gitignore\n\n";
+            echo "Add .env to .gitignore? [Y/n]: ";
+            $answer = trim(fgets(STDIN));
+            if (empty($answer) || strtolower($answer) === 'y') {
+                $gitignoreContent = file_exists('.gitignore') ? file_get_contents('.gitignore') : '';
+                // Ensure newline at end
+                if (!empty($gitignoreContent) && !str_ends_with($gitignoreContent, "\n")) {
+                    $gitignoreContent .= "\n";
+                }
+                $gitignoreContent .= "# Environment files\n.env\n.env.*\n!.env.example\n";
+                file_put_contents('.gitignore', $gitignoreContent);
+                echo "✓ Added .env to .gitignore\n";
+            }
+        }
+    }
+
+    echo "\n";
+
+    // Create project config
+    echo "Create .kpenv.json config? [Y/n]: ";
+    $answer = trim(fgets(STDIN));
+    if (empty($answer) || strtolower($answer) === 'y') {
+        if (Config::createProjectConfig($projectName, $exampleFile)) {
+            echo "✓ Created .kpenv.json\n";
+        } else {
+            echo "⚠ .kpenv.json already exists\n";
+        }
+    }
+
+    echo "\n";
+
+    // Offer to sync example
+    if ($exampleFile && !$envExists) {
+        echo "Sync $exampleFile to .env now? [Y/n]: ";
+        $answer = trim(fgets(STDIN));
+        if (empty($answer) || strtolower($answer) === 'y') {
+            echo "\n";
+            sync_example_locally($config, $config->get('default_env'));
+        }
+    }
+
+    echo "\n✅ Project initialized successfully!\n\n";
+    echo "Next steps:\n";
+    if ($envExists) {
+        echo "  1. Review your .env file\n";
+        echo "  2. Run 'kpenv backup-env' to save to KeePass\n";
+    } else if (!$exampleFile) {
+        echo "  1. Create .env.example with your configuration keys\n";
+        echo "  2. Run 'kpenv sync-example' to create .env\n";
+        echo "  3. Run 'kpenv backup-env' to save to KeePass\n";
+    } else {
+        echo "  1. Edit .env with your values\n";
+        echo "  2. Run 'kpenv backup-env' to save to KeePass\n";
+    }
+    echo "  3. Share KeePass database with your team\n";
 }
 
 function parse_env_file(string $filePath): array {
@@ -187,15 +450,27 @@ function parse_env_file(string $filePath): array {
     return $vars;
 }
 
-function sync_example_locally(string $env): void {
-    global $envExampleFile, $defaultEnv;
+function sync_example_locally(Config $config, string $env): void {
+    $defaultEnv = $config->get('default_env');
     $envFile = (".env");
     if ($env !== $defaultEnv) {
         $envFile = ".env.$env";
     }
 
-    if (!file_exists($envExampleFile)) {
-        echo "Error: Example file not found: $envExampleFile\n";
+    // Try to find example file
+    $envExampleFile = $config->get('example_file');
+    if (!$envExampleFile) {
+        $exampleFiles = $config->get('example_files', ['.env.example']);
+        foreach ($exampleFiles as $candidate) {
+            if (file_exists($candidate)) {
+                $envExampleFile = $candidate;
+                break;
+            }
+        }
+    }
+
+    if (!$envExampleFile || !file_exists($envExampleFile)) {
+        echo "Error: Example file not found. Tried: " . implode(', ', $config->get('example_files', ['.env.example'])) . "\n";
         exit(1);
     }
 
@@ -220,9 +495,9 @@ function sync_example_locally(string $env): void {
     echo "Sync completed. $addedCount keys added to $envFile.\n";
 }
 
-function backup_env_to_keepass(KeePassXCService $kp, string $project, string $env): void
+function backup_env_to_keepass(KeePassXCService $kp, string $project, string $env, Config $config): void
 {
-    global $defaultEnv;
+    $defaultEnv = $config->get('default_env');
     $envFile = (".env");
     if ($env !== $defaultEnv) {
         $envFile = ".env.$env";
@@ -246,9 +521,9 @@ function backup_env_to_keepass(KeePassXCService $kp, string $project, string $en
     }
 }
 
-function restore_env_from_keepass(KeePassXCService $kp, string $project, string $env): void
+function restore_env_from_keepass(KeePassXCService $kp, string $project, string $env, Config $config): void
 {
-    global $defaultEnv;
+    $defaultEnv = $config->get('default_env');
     $envFile = (".env");
     if ($env !== $defaultEnv) {
         $envFile = ".env.$env";
@@ -275,30 +550,68 @@ function restore_env_from_keepass(KeePassXCService $kp, string $project, string 
     }
 }
 
-function get_project_name(): ?string
+function get_project_name(Config $config): ?string
 {
-    global $baseDevFolder;
-    $currentDir = getcwd();
-    if (strpos($currentDir, $baseDevFolder) !== 0) {
-        return null;
+    // First check project config
+    $projectName = $config->get('project_name');
+    if ($projectName) {
+        return $projectName;
     }
-    $projectPath = substr($currentDir, strlen($baseDevFolder) + 1);
-    return empty($projectPath) ? null : $projectPath;
+
+    // Try git remote
+    if (file_exists('.git') && is_dir('.git')) {
+        $gitRemote = trim(shell_exec('git remote get-url origin 2>/dev/null') ?: '');
+        if (!empty($gitRemote)) {
+            if (preg_match('#/([^/]+?)(?:\.git)?$#', $gitRemote, $matches)) {
+                return $matches[1];
+            }
+        }
+    }
+
+    // Try base folder detection
+    $baseDevFolder = $config->get('base_dev_folder');
+    $currentDir = getcwd();
+    if ($baseDevFolder && strpos($currentDir, $baseDevFolder) === 0) {
+        $projectPath = substr($currentDir, strlen($baseDevFolder) + 1);
+        if (!empty($projectPath)) {
+            return $projectPath;
+        }
+    }
+
+    // Fallback to directory name
+    return basename($currentDir);
 }
 
-function show_help(): void
+function show_help(Config $config): void
 {
-    global $baseDevFolder, $keepassDb;
-    echo "Usage: php env-manager.php <subcommand> [--env=<environment>] [--password=<password>]\n\n";
-    echo "Environment management tool using KeePassXC\n\n";
+    $baseDevFolder = $config->get('base_dev_folder');
+    $keepassDb = $config->get('keepass_db');
+    $version = "1.1.0";
+
+    echo "kpenv v$version - KeePass Environment Manager\n\n";
+    echo "Usage: kpenv <subcommand> [--env=<environment>] [--password=<password>]\n\n";
     echo "Subcommands:\n";
-    echo "  sync-example    Create or update local .env file from .env.example\n";
-    echo "  backup-env      Backup a local .env file to the notes of a KeePass entry\n";
-    echo "  restore-env     Restore .env file from the notes of a KeePass entry\n\n";
+    echo "  init            Initialize kpenv in current project (check .env, .gitignore, create config)\n";
+    echo "  sync-example    Create or update local .env file from example file\n";
+    echo "  backup-env      Backup a local .env file to KeePass entry notes\n";
+    echo "  restore-env     Restore .env file from KeePass entry notes\n";
+    echo "  help            Show this help message\n\n";
     echo "Options:\n";
-    echo "  --env=<env>     Optional environment name (default: development)\n";
-    echo "  --password=<pw> Optional database password (or use KEEPASS_PASSWORD env var)\n\n";
+    echo "  --env=<env>     Environment name (default: development)\n";
+    echo "  --password=<pw> KeePass password (or use KEEPASS_PASSWORD env var)\n\n";
     echo "Configuration:\n";
-    echo "  Base folder:  $baseDevFolder\n";
-    echo "  KeePass DB:   $keepassDb\n";
+    echo "  User config:    ~/.kpenv/config.json\n";
+    echo "  Project config: .kpenv.json\n";
+    echo "  Base folder:    $baseDevFolder\n";
+    echo "  KeePass DB:     $keepassDb\n\n";
+    echo "Environment Variables:\n";
+    echo "  KEEPASS_PASSWORD    KeePass database password\n";
+    echo "  KPENV_DB           Override KeePass database path\n";
+    echo "  KPENV_BASE_FOLDER  Override base development folder\n\n";
+    echo "Examples:\n";
+    echo "  kpenv init                    # Initialize project\n";
+    echo "  kpenv sync-example            # Sync .env.example to .env\n";
+    echo "  kpenv backup-env              # Backup .env to KeePass\n";
+    echo "  kpenv restore-env             # Restore .env from KeePass\n";
+    echo "  kpenv backup-env --env=prod   # Backup .env.production\n";
 }

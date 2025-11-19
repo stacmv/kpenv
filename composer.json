@@ -1,9 +1,9 @@
 {
-  "name": "local/keepass-env-manager",
+  "name": "stacmv/kpenv",
   "description": "KeePass-based environment file (.env) manager for secure development workflows",
   "type": "project",
   "license": "MIT",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "Human + Claude",
