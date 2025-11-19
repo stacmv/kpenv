@@ -140,6 +140,58 @@ else
     echo -e "${GREEN}✓${NC} Config already exists at ~/.kpenv/config.json"
 fi
 
+# 7. Install shell completions
+echo ""
+echo "Setting up shell completions..."
+
+# Detect shell and install appropriate completions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Bash completion
+BASH_COMPLETION_INSTALLED=false
+if [ -f "$SCRIPT_DIR/completions/kpenv.bash" ]; then
+    # Try system-wide first
+    if [ -d "/etc/bash_completion.d" ] && [ -w "/etc/bash_completion.d" ]; then
+        $USE_SUDO cp "$SCRIPT_DIR/completions/kpenv.bash" /etc/bash_completion.d/kpenv
+        BASH_COMPLETION_INSTALLED=true
+        echo -e "${GREEN}✓${NC} Bash completion installed to /etc/bash_completion.d/kpenv"
+    elif [ -d "/usr/local/etc/bash_completion.d" ]; then
+        # macOS Homebrew location
+        $USE_SUDO cp "$SCRIPT_DIR/completions/kpenv.bash" /usr/local/etc/bash_completion.d/kpenv
+        BASH_COMPLETION_INSTALLED=true
+        echo -e "${GREEN}✓${NC} Bash completion installed to /usr/local/etc/bash_completion.d/kpenv"
+    else
+        # User-local installation
+        mkdir -p ~/.local/share/bash-completion/completions
+        cp "$SCRIPT_DIR/completions/kpenv.bash" ~/.local/share/bash-completion/completions/kpenv
+        BASH_COMPLETION_INSTALLED=true
+        echo -e "${GREEN}✓${NC} Bash completion installed to ~/.local/share/bash-completion/completions/kpenv"
+    fi
+fi
+
+# Zsh completion
+ZSH_COMPLETION_INSTALLED=false
+if [ -f "$SCRIPT_DIR/completions/_kpenv" ]; then
+    # Create user completions directory if using zsh
+    if [ -n "$ZSH_VERSION" ] || [ -f ~/.zshrc ]; then
+        mkdir -p ~/.zsh/completions
+        cp "$SCRIPT_DIR/completions/_kpenv" ~/.zsh/completions/_kpenv
+        ZSH_COMPLETION_INSTALLED=true
+        echo -e "${GREEN}✓${NC} Zsh completion installed to ~/.zsh/completions/_kpenv"
+
+        # Check if fpath is configured
+        if ! grep -q 'fpath.*\.zsh/completions' ~/.zshrc 2>/dev/null; then
+            echo -e "${YELLOW}⚠${NC} Add this to your ~/.zshrc to enable completions:"
+            echo '  fpath=(~/.zsh/completions $fpath)'
+            echo '  autoload -Uz compinit && compinit'
+        fi
+    fi
+fi
+
+if [ "$BASH_COMPLETION_INSTALLED" = false ] && [ "$ZSH_COMPLETION_INSTALLED" = false ]; then
+    echo -e "${YELLOW}⚠${NC} Shell completions not installed (completion files not found)"
+fi
+
 echo ""
 echo -e "${GREEN}✅ Installation complete!${NC}"
 echo ""

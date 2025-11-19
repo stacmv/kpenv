@@ -1,0 +1,51 @@
+#compdef kpenv
+
+# Zsh completion for kpenv
+# Install: copy to a directory in your $fpath (e.g., ~/.zsh/completions/)
+
+_kpenv() {
+    local -a commands
+    local -a envs
+
+    commands=(
+        'init:Initialize kpenv in current project'
+        'sync-example:Create or update .env from example file'
+        'backup-env:Backup .env to KeePass'
+        'restore-env:Restore .env from KeePass'
+        'help:Show help message'
+    )
+
+    envs=(
+        'development:Development environment'
+        'staging:Staging environment'
+        'production:Production environment'
+    )
+
+    _arguments -C \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case "$state" in
+        command)
+            _describe -t commands 'kpenv command' commands
+            ;;
+        args)
+            case "${words[1]}" in
+                init)
+                    # No additional arguments for init
+                    ;;
+                sync-example|backup-env|restore-env)
+                    _arguments \
+                        '--env=[Environment name]:environment:->env' \
+                        '--password=[KeePass password]:password:'
+
+                    if [[ "$state" == "env" ]]; then
+                        _describe -t envs 'environment' envs
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_kpenv "$@"

@@ -33,6 +33,31 @@ fi
 
 echo ""
 
+# Remove shell completions
+echo "Removing shell completions..."
+
+# Bash completions
+if [ -f /etc/bash_completion.d/kpenv ]; then
+    $USE_SUDO rm -f /etc/bash_completion.d/kpenv
+    echo -e "${GREEN}✓${NC} Removed /etc/bash_completion.d/kpenv"
+fi
+if [ -f /usr/local/etc/bash_completion.d/kpenv ]; then
+    $USE_SUDO rm -f /usr/local/etc/bash_completion.d/kpenv
+    echo -e "${GREEN}✓${NC} Removed /usr/local/etc/bash_completion.d/kpenv"
+fi
+if [ -f ~/.local/share/bash-completion/completions/kpenv ]; then
+    rm -f ~/.local/share/bash-completion/completions/kpenv
+    echo -e "${GREEN}✓${NC} Removed ~/.local/share/bash-completion/completions/kpenv"
+fi
+
+# Zsh completions
+if [ -f ~/.zsh/completions/_kpenv ]; then
+    rm -f ~/.zsh/completions/_kpenv
+    echo -e "${GREEN}✓${NC} Removed ~/.zsh/completions/_kpenv"
+fi
+
+echo ""
+
 # Ask about config
 if [ -d ~/.kpenv ]; then
     echo "Configuration directory exists: ~/.kpenv"

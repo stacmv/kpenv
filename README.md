@@ -101,6 +101,49 @@ EOF
 ./uninstall.sh
 ```
 
+### Shell Completion
+
+The installer automatically sets up shell completions. For manual setup:
+
+#### Bash
+
+```bash
+# System-wide (requires sudo)
+sudo cp completions/kpenv.bash /etc/bash_completion.d/kpenv
+
+# Or user-local
+mkdir -p ~/.local/share/bash-completion/completions
+cp completions/kpenv.bash ~/.local/share/bash-completion/completions/kpenv
+
+# Reload completions
+source ~/.bashrc
+```
+
+#### Zsh
+
+```bash
+# Copy completion file
+mkdir -p ~/.zsh/completions
+cp completions/_kpenv ~/.zsh/completions/_kpenv
+
+# Add to ~/.zshrc (if not already present)
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+
+# Reload
+source ~/.zshrc
+```
+
+#### Usage
+
+After installation, use Tab to complete:
+
+```bash
+kpenv <Tab>              # Shows: init sync-example backup-env restore-env help
+kpenv backup-env --<Tab> # Shows: --env --password
+kpenv backup-env --env=<Tab>  # Shows: development staging production
+```
+
 ---
 
 ## Usage
@@ -345,6 +388,9 @@ env-manager/
 ├── LICENSE                        # MIT License
 ├── DISTRIBUTION_STRATEGY.md       # Distribution plan
 ├── composer.json                  # PHP package metadata
+├── completions/
+│   ├── kpenv.bash                # Bash completion script
+│   └── _kpenv                    # Zsh completion script
 ├── docs/
 │   ├── prd.md                    # Product Requirements Document
 │   └── planning/                 # Planning Framework
