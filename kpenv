@@ -450,6 +450,81 @@ function parse_env_file(string $filePath): array {
     return $vars;
 }
 
+function parse_env_line(string $line): ?array {
+    // Parse a line and return [key, value, hasQuotes, lineType]
+    // lineType: 'variable', 'comment', 'empty'
+
+    $trimmed = trim($line);
+
+    if (empty($trimmed)) {
+        return ['type' => 'empty', 'line' => $line];
+    }
+
+    if (str_starts_with($trimmed, '#')) {
+        return ['type' => 'comment', 'line' => $line];
+    }
+
+    if (strpos($line, '=') !== false) {
+        list($key, $valuePart) = explode('=', $line, 2);
+        $key = trim($key);
+        $valuePart = ltrim($valuePart); // Only left trim to preserve structure
+
+        $hasQuotes = false;
+        $quoteChar = null;
+        $value = '';
+
+        // Check if value starts with a quote
+        if (strlen($valuePart) > 0 && ($valuePart[0] === '"' || $valuePart[0] === "'")) {
+            $quoteChar = $valuePart[0];
+            $hasQuotes = true;
+
+            // Find the closing quote
+            $pos = 1;
+            $escaped = false;
+            while ($pos < strlen($valuePart)) {
+                if ($escaped) {
+                    $escaped = false;
+                    $pos++;
+                    continue;
+                }
+
+                if ($valuePart[$pos] === '\\') {
+                    $escaped = true;
+                    $pos++;
+                    continue;
+                }
+
+                if ($valuePart[$pos] === $quoteChar) {
+                    // Found closing quote
+                    $value = substr($valuePart, 1, $pos - 1);
+                    break;
+                }
+
+                $pos++;
+            }
+        } else {
+            // No quotes - strip inline comments
+            // Look for # preceded by whitespace
+            if (preg_match('/^([^#]*?)\s+#/', $valuePart, $matches)) {
+                $value = rtrim($matches[1]);
+            } else {
+                $value = rtrim($valuePart);
+            }
+        }
+
+        return [
+            'type' => 'variable',
+            'key' => $key,
+            'value' => $value,
+            'hasQuotes' => $hasQuotes,
+            'quoteChar' => $quoteChar ?: '"',
+            'line' => $line
+        ];
+    }
+
+    return null;
+}
+
 function sync_example_locally(Config $config, string $env): void {
     $defaultEnv = $config->get('default_env');
     $envFile = (".env");
@@ -476,22 +551,86 @@ function sync_example_locally(Config $config, string $env): void {
 
     echo "Syncing $envExampleFile with local $envFile...\n";
 
-    $exampleVars = parse_env_file($envExampleFile);
+    // Parse existing .env to know which keys already exist
     $localVars = parse_env_file($envFile);
+
+    // Read example file line by line, preserving structure
+    $exampleLines = file($envExampleFile, FILE_IGNORE_NEW_LINES);
+    $outputLines = [];
     $addedCount = 0;
 
-    $handle = fopen($envFile, 'a');
+    // If .env exists, read it first
+    $envExists = file_exists($envFile);
+    if ($envExists) {
+        $outputLines = file($envFile, FILE_IGNORE_NEW_LINES);
+    }
 
-    foreach ($exampleVars as $key => $_) {
-        if (!isset($localVars[$key])) {
-            echo "New key '$key' found. Enter value: ";
-            $value = trim(fgets(STDIN));
-            fwrite($handle, "$key=\"" . addslashes($value) . "\"\n");
+    // Process example file
+    foreach ($exampleLines as $line) {
+        $parsed = parse_env_line($line);
+
+        if ($parsed === null) {
+            // Unknown line type, skip
+            continue;
+        }
+
+        if ($parsed['type'] === 'comment' || $parsed['type'] === 'empty') {
+            // If .env doesn't exist yet, include comments and empty lines
+            if (!$envExists) {
+                $outputLines[] = $line;
+            }
+            continue;
+        }
+
+        if ($parsed['type'] === 'variable') {
+            $key = $parsed['key'];
+
+            // Check if this key already exists in local .env
+            if (isset($localVars[$key])) {
+                // Key exists, skip
+                continue;
+            }
+
+            // Key doesn't exist, prompt user
+            $defaultValue = $parsed['value'];
+            if ($defaultValue !== '') {
+                echo "New key '$key' found. Enter value (default: $defaultValue): ";
+            } else {
+                echo "New key '$key' found. Enter value: ";
+            }
+
+            $input = fgets(STDIN);
+            $value = $input !== false ? trim($input) : '';
+
+            // Track if user entered a custom value or used default
+            $usedDefault = false;
+            if ($value === '' && $defaultValue !== '') {
+                $value = $defaultValue;
+                $usedDefault = true;
+            }
+
+            // Format the value matching the example file's style
+            if ($parsed['hasQuotes']) {
+                $quoteChar = $parsed['quoteChar'];
+                // Only escape if user entered a new value
+                // Default values from the file are already properly escaped
+                if ($usedDefault) {
+                    $escapedValue = $value;
+                } else {
+                    $escapedValue = str_replace(['\\', $quoteChar], ['\\\\', '\\' . $quoteChar], $value);
+                }
+                $outputLines[] = "$key=$quoteChar$escapedValue$quoteChar";
+            } else {
+                // No quotes in example, don't add quotes
+                $outputLines[] = "$key=$value";
+            }
+
             $addedCount++;
         }
     }
 
-    fclose($handle);
+    // Write the result
+    file_put_contents($envFile, implode("\n", $outputLines) . "\n");
     echo "Sync completed. $addedCount keys added to $envFile.\n";
 }
 
