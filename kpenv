@@ -596,7 +596,7 @@ function sync_example_locally(Config $config, string $env): void {
 
             // Key doesn't exist, prompt user
             $defaultValue = $parsed['value'];
-            if (!empty($defaultValue)) {
+            if ($defaultValue !== '') {
                 echo "New key '$key' found. Enter value (default: $defaultValue): ";
             } else {
                 echo "New key '$key' found. Enter value: ";
@@ -606,7 +606,7 @@ function sync_example_locally(Config $config, string $env): void {
             $value = $input !== false ? trim($input) : '';
 
             // If user just presses Enter and there's a default, use it
-            if (empty($value) && !empty($defaultValue)) {
+            if ($value === '' && $defaultValue !== '') {
                 $value = $defaultValue;
             }
 
