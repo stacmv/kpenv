@@ -13,7 +13,10 @@
 declare(strict_types=1);
 
 // --- Main Execution ---
-main($argc, $argv);
+// Only run main() if this script is being executed directly (not included for tests)
+if (isset($argc) && isset($argv) && realpath($argv[0] ?? '') === __FILE__) {
+    main($argc, $argv);
+}
 
 class Config
 {
@@ -502,17 +505,51 @@ function parse_env_line(string $line): ?array {
     }
 
     if (strpos($line, '=') !== false) {
-        list($key, $value) = explode('=', $line, 2);
+        list($key, $valuePart) = explode('=', $line, 2);
         $key = trim($key);
-        $value = trim($value);
+        $valuePart = ltrim($valuePart); // Only left trim to preserve structure
 
-        // Detect if value has quotes
         $hasQuotes = false;
         $quoteChar = null;
-        if (preg_match('/^(["\'])(.*)\\1$/', $value, $matches)) {
+        $value = '';
+
+        // Check if value starts with a quote
+        if (strlen($valuePart) > 0 && ($valuePart[0] === '"' || $valuePart[0] === "'")) {
+            $quoteChar = $valuePart[0];
             $hasQuotes = true;
-            $quoteChar = $matches[1];
-            $value = $matches[2];
+
+            // Find the closing quote
+            $pos = 1;
+            $escaped = false;
+            while ($pos < strlen($valuePart)) {
+                if ($escaped) {
+                    $escaped = false;
+                    $pos++;
+                    continue;
+                }
+
+                if ($valuePart[$pos] === '\\') {
+                    $escaped = true;
+                    $pos++;
+                    continue;
+                }
+
+                if ($valuePart[$pos] === $quoteChar) {
+                    // Found closing quote
+                    $value = substr($valuePart, 1, $pos - 1);
+                    break;
+                }
+
+                $pos++;
+            }
+        } else {
+            // No quotes - strip inline comments
+            // Look for # preceded by whitespace
+            if (preg_match('/^([^#]*?)\s+#/', $valuePart, $matches)) {
+                $value = rtrim($matches[1]);
+            } else {
+                $value = rtrim($valuePart);
+            }
         }
 
         return [
@@ -605,15 +642,23 @@ function sync_example_locally(Config $config, string $env): void {
             $input = fgets(STDIN);
             $value = $input !== false ? trim($input) : '';
 
-            // If user just presses Enter and there's a default, use it
+            // Track if user entered a custom value or used default
+            $usedDefault = false;
             if ($value === '' && $defaultValue !== '') {
                 $value = $defaultValue;
+                $usedDefault = true;
             }
 
             // Format the value matching the example file's style
             if ($parsed['hasQuotes']) {
                 $quoteChar = $parsed['quoteChar'];
-                $escapedValue = addslashes($value);
+                // Only escape if user entered a new value
+                // Default values from the file are already properly escaped
+                if ($usedDefault) {
+                    $escapedValue = $value;
+                } else {
+                    $escapedValue = str_replace(['\\', $quoteChar], ['\\\\', '\\' . $quoteChar], $value);
+                }
                 $outputLines[] = "$key=$quoteChar$escapedValue$quoteChar";
             } else {
                 // No quotes in example, don't add quotes
