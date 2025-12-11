@@ -13,7 +13,10 @@
 declare(strict_types=1);
 
 // --- Main Execution ---
-main($argc, $argv);
+// Only run main() if this script is being executed directly (not included for tests)
+if (isset($argc) && isset($argv) && realpath($argv[0] ?? '') === __FILE__) {
+    main($argc, $argv);
+}
 
 class Config
 {
