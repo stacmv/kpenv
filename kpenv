@@ -123,7 +123,7 @@ class Config
         return file_put_contents($configFile, $json) !== false;
     }
 
-    public static function createProjectConfig(string $projectName, ?string $exampleFile = null): bool
+    public static function createProjectConfig(string $projectName, array $environments, ?string $exampleFile = null): bool
     {
         $configFile = getcwd() . '/.kpenv.json';
 
@@ -134,7 +134,7 @@ class Config
 
         $projectConfig = [
             'project_name' => $projectName,
-            'environments' => ['development', 'staging', 'production'],
+            'environments' => $environments,
         ];
 
         if ($exampleFile !== null) {
@@ -329,6 +329,18 @@ function init_project(Config $config): void
     echo "Project detected: $projectName\n";
     echo "Current directory: $currentDir\n\n";
 
+    // Ask user to confirm or change project name
+    echo "Project name [$projectName]: ";
+    $userInput = fgets(STDIN);
+    $userInput = $userInput !== false ? trim($userInput) : '';
+    if (!empty($userInput)) {
+        $projectName = $userInput;
+        echo "✓ Using project name: $projectName\n";
+    } else {
+        echo "✓ Using detected project name: $projectName\n";
+    }
+    echo "\n";
+
     // Detect example file
     $exampleFiles = $config->get('example_files', ['.env.example']);
     $exampleFile = null;
@@ -367,6 +379,28 @@ function init_project(Config $config): void
 
     echo "\n";
 
+    // Ask user to configure environments
+    $defaultEnvironments = ['development', 'staging', 'production'];
+    echo "Default environments: " . implode(', ', $defaultEnvironments) . "\n";
+    echo "Enter environments (comma-separated) or press Enter to use defaults: ";
+    $userInput = fgets(STDIN);
+    $userInput = $userInput !== false ? trim($userInput) : '';
+
+    if (!empty($userInput)) {
+        $environments = array_map('trim', explode(',', $userInput));
+        $environments = array_filter($environments); // Remove empty strings
+        if (!empty($environments)) {
+            echo "✓ Using environments: " . implode(', ', $environments) . "\n";
+        } else {
+            $environments = $defaultEnvironments;
+            echo "✓ Using default environments: " . implode(', ', $environments) . "\n";
+        }
+    } else {
+        $environments = $defaultEnvironments;
+        echo "✓ Using default environments: " . implode(', ', $environments) . "\n";
+    }
+    echo "\n";
+
     // Check and update .gitignore
     if ($config->get('auto_gitignore', true)) {
         echo "Checking .gitignore...\n";
@@ -384,7 +418,8 @@ function init_project(Config $config): void
         if ($gitignoreNeedsUpdate) {
             echo "⚠ .env not found in .gitignore\n\n";
             echo "Add .env to .gitignore? [Y/n]: ";
-            $answer = trim(fgets(STDIN));
+            $answer = fgets(STDIN);
+            $answer = $answer !== false ? trim($answer) : '';
             if (empty($answer) || strtolower($answer) === 'y') {
                 $gitignoreContent = file_exists('.gitignore') ? file_get_contents('.gitignore') : '';
                 // Ensure newline at end
@@ -402,9 +437,10 @@ function init_project(Config $config): void
 
     // Create project config
     echo "Create .kpenv.json config? [Y/n]: ";
-    $answer = trim(fgets(STDIN));
+    $answer = fgets(STDIN);
+    $answer = $answer !== false ? trim($answer) : '';
     if (empty($answer) || strtolower($answer) === 'y') {
-        if (Config::createProjectConfig($projectName, $exampleFile)) {
+        if (Config::createProjectConfig($projectName, $environments, $exampleFile)) {
             echo "✓ Created .kpenv.json\n";
         } else {
             echo "⚠ .kpenv.json already exists\n";
@@ -416,7 +452,8 @@ function init_project(Config $config): void
     // Offer to sync example
     if ($exampleFile && !$envExists) {
         echo "Sync $exampleFile to .env now? [Y/n]: ";
-        $answer = trim(fgets(STDIN));
+        $answer = fgets(STDIN);
+        $answer = $answer !== false ? trim($answer) : '';
         if (empty($answer) || strtolower($answer) === 'y') {
             echo "\n";
             sync_example_locally($config, $config->get('default_env'));
