@@ -450,6 +450,47 @@ function parse_env_file(string $filePath): array {
     return $vars;
 }
 
+function parse_env_line(string $line): ?array {
+    // Parse a line and return [key, value, hasQuotes, lineType]
+    // lineType: 'variable', 'comment', 'empty'
+
+    $trimmed = trim($line);
+
+    if (empty($trimmed)) {
+        return ['type' => 'empty', 'line' => $line];
+    }
+
+    if (str_starts_with($trimmed, '#')) {
+        return ['type' => 'comment', 'line' => $line];
+    }
+
+    if (strpos($line, '=') !== false) {
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+
+        // Detect if value has quotes
+        $hasQuotes = false;
+        $quoteChar = null;
+        if (preg_match('/^(["\'])(.*)\\1$/', $value, $matches)) {
+            $hasQuotes = true;
+            $quoteChar = $matches[1];
+            $value = $matches[2];
+        }
+
+        return [
+            'type' => 'variable',
+            'key' => $key,
+            'value' => $value,
+            'hasQuotes' => $hasQuotes,
+            'quoteChar' => $quoteChar ?: '"',
+            'line' => $line
+        ];
+    }
+
+    return null;
+}
+
 function sync_example_locally(Config $config, string $env): void {
     $defaultEnv = $config->get('default_env');
     $envFile = (".env");
@@ -476,22 +517,78 @@ function sync_example_locally(Config $config, string $env): void {
 
     echo "Syncing $envExampleFile with local $envFile...\n";
 
-    $exampleVars = parse_env_file($envExampleFile);
+    // Parse existing .env to know which keys already exist
     $localVars = parse_env_file($envFile);
+
+    // Read example file line by line, preserving structure
+    $exampleLines = file($envExampleFile, FILE_IGNORE_NEW_LINES);
+    $outputLines = [];
     $addedCount = 0;
 
-    $handle = fopen($envFile, 'a');
+    // If .env exists, read it first
+    $envExists = file_exists($envFile);
+    if ($envExists) {
+        $outputLines = file($envFile, FILE_IGNORE_NEW_LINES);
+    }
 
-    foreach ($exampleVars as $key => $_) {
-        if (!isset($localVars[$key])) {
-            echo "New key '$key' found. Enter value: ";
-            $value = trim(fgets(STDIN));
-            fwrite($handle, "$key=\"" . addslashes($value) . "\"\n");
+    // Process example file
+    foreach ($exampleLines as $line) {
+        $parsed = parse_env_line($line);
+
+        if ($parsed === null) {
+            // Unknown line type, skip
+            continue;
+        }
+
+        if ($parsed['type'] === 'comment' || $parsed['type'] === 'empty') {
+            // If .env doesn't exist yet, include comments and empty lines
+            if (!$envExists) {
+                $outputLines[] = $line;
+            }
+            continue;
+        }
+
+        if ($parsed['type'] === 'variable') {
+            $key = $parsed['key'];
+
+            // Check if this key already exists in local .env
+            if (isset($localVars[$key])) {
+                // Key exists, skip
+                continue;
+            }
+
+            // Key doesn't exist, prompt user
+            $defaultValue = $parsed['value'];
+            if ($defaultValue !== '') {
+                echo "New key '$key' found. Enter value (default: $defaultValue): ";
+            } else {
+                echo "New key '$key' found. Enter value: ";
+            }
+
+            $input = fgets(STDIN);
+            $value = $input !== false ? trim($input) : '';
+
+            // If user just presses Enter and there's a default, use it
+            if ($value === '' && $defaultValue !== '') {
+                $value = $defaultValue;
+            }
+
+            // Format the value matching the example file's style
+            if ($parsed['hasQuotes']) {
+                $quoteChar = $parsed['quoteChar'];
+                $escapedValue = addslashes($value);
+                $outputLines[] = "$key=$quoteChar$escapedValue$quoteChar";
+            } else {
+                // No quotes in example, don't add quotes
+                $outputLines[] = "$key=$value";
+            }
+
             $addedCount++;
         }
     }
 
-    fclose($handle);
+    // Write the result
+    file_put_contents($envFile, implode("\n", $outputLines) . "\n");
     echo "Sync completed. $addedCount keys added to $envFile.\n";
 }
 
