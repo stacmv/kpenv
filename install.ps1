@@ -7,18 +7,30 @@
 $ErrorActionPreference = "Stop"
 
 # Colors for output
-function Write-Success { param($msg) Write-Host "✓ $msg" -ForegroundColor Green }
-function Write-Error { param($msg) Write-Host "✗ $msg" -ForegroundColor Red }
-function Write-Warning { param($msg) Write-Host "⚠ $msg" -ForegroundColor Yellow }
-function Write-Info { param($msg) Write-Host "  $msg" -ForegroundColor Cyan }
+function Write-Success {
+    param($msg)
+    Write-Host "[OK] $msg" -ForegroundColor Green
+}
+function Write-CustomError {
+    param($msg)
+    Write-Host "[ERROR] $msg" -ForegroundColor Red
+}
+function Write-CustomWarning {
+    param($msg)
+    Write-Host "[WARN] $msg" -ForegroundColor Yellow
+}
+function Write-Info {
+    param($msg)
+    Write-Host "  $msg" -ForegroundColor Cyan
+}
 
-Write-Host "🔧 Installing kpenv (KeePass Environment Manager)..." -ForegroundColor Cyan
+Write-Host "Installing kpenv (KeePass Environment Manager)..." -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Check if Scoop is installed
 Write-Host "Checking prerequisites..."
 if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
-    Write-Error "Scoop package manager not found"
+    Write-CustomError "Scoop package manager not found"
     Write-Host ""
     Write-Info "Scoop is required for managing dependencies on Windows."
     Write-Info "Please install Scoop first: https://scoop.sh"
@@ -33,19 +45,19 @@ Write-Success "Scoop found"
 
 # 2. Check PHP
 if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
-    Write-Warning "PHP not found"
+    Write-CustomWarning "PHP not found"
     Write-Info "PHP 8.2+ is required for kpenv"
     $response = Read-Host "Install PHP via Scoop? [Y/n]"
     if ($response -eq '' -or $response -match '^[Yy]$') {
         Write-Host "Installing PHP..."
         scoop install php
         if (-not $?) {
-            Write-Error "Failed to install PHP"
+            Write-CustomError "Failed to install PHP"
             exit 1
         }
         Write-Success "PHP installed"
     } else {
-        Write-Error "PHP is required. Installation cancelled."
+        Write-CustomError "PHP is required. Installation cancelled."
         exit 1
     }
 } else {
@@ -55,7 +67,7 @@ if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
     $currentVersion = [version]$phpVersion
 
     if ($currentVersion -lt $requiredVersion) {
-        Write-Error "PHP 8.2+ required (found $phpVersion)"
+        Write-CustomError "PHP 8.2+ required (found $phpVersion)"
         Write-Info "Please upgrade PHP:"
         Write-Info "  scoop update php"
         exit 1
@@ -66,7 +78,7 @@ if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
 
 # 3. Check KeePassXC CLI (warn but don't fail)
 if (-not (Get-Command keepassxc-cli -ErrorAction SilentlyContinue)) {
-    Write-Warning "keepassxc-cli not found"
+    Write-CustomWarning "keepassxc-cli not found"
     Write-Info "KeePassXC is needed for backup/restore features"
     $response = Read-Host "Install KeePassXC via Scoop? [Y/n]"
     if ($response -eq '' -or $response -match '^[Yy]$') {
@@ -75,13 +87,13 @@ if (-not (Get-Command keepassxc-cli -ErrorAction SilentlyContinue)) {
         scoop bucket add extras 2>$null
         scoop install keepassxc
         if (-not $?) {
-            Write-Warning "Failed to install KeePassXC"
+            Write-CustomWarning "Failed to install KeePassXC"
             Write-Info "You can install it manually later: scoop install keepassxc"
         } else {
             Write-Success "KeePassXC installed"
         }
     } else {
-        Write-Warning "Continuing without KeePassXC"
+        Write-CustomWarning "Continuing without KeePassXC"
         Write-Info "Install later with: scoop install keepassxc"
     }
 } else {
@@ -91,7 +103,7 @@ if (-not (Get-Command keepassxc-cli -ErrorAction SilentlyContinue)) {
 # 4. Check for Unix-like shell (optional but recommended)
 if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
     Write-Host ""
-    Write-Warning "Unix-like shell not found"
+    Write-CustomWarning "Unix-like shell not found"
     Write-Info "kpenv works best with Unix-like shells (Git Bash, MSYS2, WSL, Cmder)"
     Write-Info "Cmder provides a portable console emulator with bash support"
     $response = Read-Host "Install Cmder via Scoop? [y/N]"
@@ -100,7 +112,7 @@ if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
         scoop bucket add extras 2>$null
         scoop install cmder
         if (-not $?) {
-            Write-Warning "Failed to install Cmder"
+            Write-CustomWarning "Failed to install Cmder"
             Write-Info "You can install it manually later: scoop install cmder"
         } else {
             Write-Success "Cmder installed"
@@ -163,7 +175,7 @@ php "$installDir\kpenv" %*
         $installedPath = "$installDir\kpenv.cmd"
     }
 } else {
-    Write-Error "kpenv file not found in current directory"
+    Write-CustomError "kpenv file not found in current directory"
     Write-Info "Please run this installer from the kpenv repository directory"
     exit 1
 }
@@ -175,14 +187,14 @@ if ($installDir -ne "$env:USERPROFILE\scoop\shims") {
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($currentPath -notlike "*$installDir*") {
         Write-Host ""
-        Write-Warning "Installation directory is not in PATH"
+        Write-CustomWarning "Installation directory is not in PATH"
         $response = Read-Host "Add $installDir to PATH? [Y/n]"
         if ($response -eq '' -or $response -match '^[Yy]$') {
             [Environment]::SetEnvironmentVariable("Path", "$currentPath;$installDir", "User")
             Write-Success "Added $installDir to PATH"
             Write-Info "Please restart your terminal for PATH changes to take effect"
         } else {
-            Write-Warning "Skipped PATH modification"
+            Write-CustomWarning "Skipped PATH modification"
             Write-Info "Add manually: `$env:Path += ';$installDir'"
         }
     }
@@ -226,7 +238,7 @@ Write-Info "Note: PowerShell completions are not yet implemented"
 Write-Info "Shell completions are available for Bash/Zsh on Unix systems"
 
 Write-Host ""
-Write-Host "✅ Installation complete!" -ForegroundColor Green
+Write-Host "[COMPLETE] Installation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Quick start:"
 Write-Info "cd your-project"
@@ -240,5 +252,5 @@ Write-Host ""
 # Check if kpenv is immediately available
 $kpenvAvailable = Get-Command kpenv -ErrorAction SilentlyContinue
 if (-not $kpenvAvailable) {
-    Write-Warning "Please restart your terminal to use kpenv"
+    Write-CustomWarning "Please restart your terminal to use kpenv"
 }

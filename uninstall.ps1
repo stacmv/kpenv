@@ -6,12 +6,24 @@
 $ErrorActionPreference = "Stop"
 
 # Colors for output
-function Write-Success { param($msg) Write-Host "✓ $msg" -ForegroundColor Green }
-function Write-Error { param($msg) Write-Host "✗ $msg" -ForegroundColor Red }
-function Write-Warning { param($msg) Write-Host "⚠ $msg" -ForegroundColor Yellow }
-function Write-Info { param($msg) Write-Host "  $msg" -ForegroundColor Cyan }
+function Write-Success {
+    param($msg)
+    Write-Host "[OK] $msg" -ForegroundColor Green
+}
+function Write-CustomError {
+    param($msg)
+    Write-Host "[ERROR] $msg" -ForegroundColor Red
+}
+function Write-CustomWarning {
+    param($msg)
+    Write-Host "[WARN] $msg" -ForegroundColor Yellow
+}
+function Write-Info {
+    param($msg)
+    Write-Host "  $msg" -ForegroundColor Cyan
+}
 
-Write-Host "🗑️  Uninstalling kpenv..." -ForegroundColor Cyan
+Write-Host "Uninstalling kpenv..." -ForegroundColor Cyan
 Write-Host ""
 
 $removed = $false
@@ -47,7 +59,7 @@ if (Test-Path "$env:USERPROFILE\bin\kpenv.cmd") {
 }
 
 if (-not $removed) {
-    Write-Warning "kpenv installation not found"
+    Write-CustomWarning "kpenv installation not found"
 }
 
 Write-Host ""
@@ -63,14 +75,14 @@ if (Test-Path $configDir) {
         Remove-Item -Path $configDir -Recurse -Force
         Write-Success "Removed $configDir"
     } else {
-        Write-Warning "Keeping $configDir"
+        Write-CustomWarning "Keeping $configDir"
     }
 } else {
     Write-Info "No config directory found"
 }
 
 Write-Host ""
-Write-Host "✅ Uninstall complete" -ForegroundColor Green
+Write-Host "[COMPLETE] Uninstall complete" -ForegroundColor Green
 Write-Host ""
 Write-Info "Note: Project-specific .kpenv.json files in your projects were not removed."
 Write-Info "You can manually delete them if needed."
