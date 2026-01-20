@@ -50,6 +50,8 @@
 
 #### Quick Install (Recommended)
 
+**Linux/macOS:**
+
 ```bash
 # Clone or download the repository
 git clone https://github.com/stacmv/env-manager.git
@@ -65,6 +67,33 @@ The installer will:
 - ✅ Install `kpenv` to `/usr/local/bin`
 - ✅ Create `~/.kpenv/config.json` with defaults
 - ✅ Make kpenv globally available
+
+**Windows:**
+
+```powershell
+# Prerequisites: Install Scoop package manager first
+# Visit https://scoop.sh or run:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+# Clone or download the repository
+git clone https://github.com/stacmv/env-manager.git
+cd env-manager
+
+# Run installer
+.\install.ps1
+```
+
+The Windows installer will:
+- ✅ Check Scoop is installed (required for dependency management)
+- ✅ Offer to install PHP 8.2+ via Scoop if not found
+- ✅ Offer to install KeePassXC via Scoop if not found
+- ✅ Offer to install Cmder (Unix-like shell) via Scoop if no bash found
+- ✅ Install `kpenv` to user directory with PATH access
+- ✅ Create `%USERPROFILE%\.kpenv\config.json` with defaults
+- ✅ Make kpenv globally available
+
+**Note for Windows users:** kpenv works best in Unix-like environments (Git Bash, MSYS2, WSL, Cmder). The installer can optionally install Cmder for you.
 
 #### Manual Installation
 
@@ -97,8 +126,14 @@ EOF
 
 #### Uninstallation
 
+**Linux/macOS:**
 ```bash
 ./uninstall.sh
+```
+
+**Windows:**
+```powershell
+.\uninstall.ps1
 ```
 
 ### Shell Completion
@@ -382,8 +417,10 @@ kpenv restore-env --env=production
 ```
 env-manager/
 ├── kpenv                          # Main executable
-├── install.sh                     # Installation script
-├── uninstall.sh                   # Uninstallation script
+├── install.sh                     # Installation script (Linux/macOS)
+├── install.ps1                    # Installation script (Windows)
+├── uninstall.sh                   # Uninstallation script (Linux/macOS)
+├── uninstall.ps1                  # Uninstallation script (Windows)
 ├── README.md                      # This file
 ├── LICENSE                        # MIT License
 ├── DISTRIBUTION_STRATEGY.md       # Distribution plan
