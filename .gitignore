@@ -17,3 +17,9 @@ composer.lock
 # OS
 .DS_Store
 Thumbs.db
+
+# Planning Framework v2.0
+# Uncomment if you want to keep planning files private:
+# planning/
+# PLANNING.md
+# .qa-workflow.md

@@ -1,186 +1,179 @@
-# Implementation Plan - kpenv (KeePass Environment Manager)
+# Implementation Plan
 
-**Status:** Version 1.0 Complete ✅
-**Started:** Unknown (pre-2025-11-05)
-**Extracted:** 2025-11-05
-**Last Updated:** 2025-11-05
+**Project:** kpenv
+**Version:** 2.0
+**Started:** 2026-02-02
+**Last Updated:** 2026-02-02
 
 ---
 
 ## Quick Status
 
-**Current Phase:** Maintenance / Planning v1.1
-**Current Version:** 1.0.0 ✅ COMPLETE
-**Next Version:** 1.1 - Feature additions
+**Current Milestone:** Version 1.1 (Stable)
+**Current Focus:** Planning v1.2 features
+**Progress:** 100% - v1.1 complete
 
-**Progress Overview:**
-- [x] Version 1.0: Core functionality (100% - COMPLETE)
-- [ ] Version 1.1: Enhanced features (0% - PLANNED)
-- [ ] Version 2.0: Major refactoring (0% - FUTURE)
-
-**Overall Status:** Production-ready tool, fully functional
+**Active Issues:**
+- None currently open
 
 ---
 
-## Version 1.0 - COMPLETE ✅
+## Roadmap
 
-**Goal:** Create functional CLI tool for managing .env files with KeePass backend
+### Milestone 1: Version 1.2 (Next)
+**Goal:** Add utility commands and enhanced testing for better usability and reliability
 
-**Status:** ✅ Complete
+**Status:** ⏸️ Not Started
 
-**Components:**
-- [x] KeePassXCService wrapper class
-- [x] sync-example command
-- [x] backup-env command
-- [x] restore-env command
-- [x] Multi-environment support (--env flag)
-- [x] Secure password handling
-- [x] Project name auto-detection
-- [x] Safe restore mode (.env.fetched)
-- [x] Help text
-- [x] Error handling
-- [x] Executable setup (shebang, chmod +x)
+**Planned Work:**
+- List all backed-up projects (`list` command)
+- Diff local vs KeePass (`diff` command)
+- PHPUnit/Pest test suite expansion
+- CI/CD integration
+- Composer package distribution on Packagist
 
-**Deliverable:** Single PHP file (~300 lines) with all core functionality
+**Target:** Q1 2026
 
-**Completed:** Pre-2025-11-05
+**Progress:** 0/5 planned features
 
 ---
 
-## Version 1.1 - PLANNED
+### Milestone 2: Version 2.0
+**Goal:** Refactor to modern PHP architecture and expand distribution channels
 
-**Goal:** Add convenience features and quality improvements
+**Status:** ⏸️ Not Started
 
-**Estimated Time:** 2-3 weeks
+**Planned Work:**
+- Refactor to PSR-4 class structure
+- APT/Homebrew packages for native installation
+- Plugin system for other backends (1Password, Bitwarden)
+- Optional GUI wrapper (Electron/Tauri)
 
-### 1.1.1 List Command
+**Dependencies:**
+- Requires: v1.2 completion
+- External: Package repository setup
 
-**Tasks:**
-- [ ] Implement `list` command to show all backed-up projects
-- [ ] Parse KeePass database structure
-- [ ] Display project/environment pairs in table format
-- [ ] Add `--json` output option
-
-**Estimated Time:** 4-6 hours
-
-### 1.1.2 Diff Command
-
-**Tasks:**
-- [ ] Implement `diff` command to compare local vs KeePass
-- [ ] Show added/removed/changed keys
-- [ ] Unified diff format
-- [ ] Option to show values or just keys
-
-**Estimated Time:** 4-6 hours
-
-### 1.1.3 Config File Support
-
-**Tasks:**
-- [ ] Support `kpenv.json` in project root
-- [ ] Allow custom base folder per project
-- [ ] Allow custom KeePass entry path
-- [ ] Document config file format
-
-**Estimated Time:** 3-4 hours
-
-### 1.1.4 Testing
-
-**Tasks:**
-- [ ] Set up PHPUnit
-- [ ] Unit tests for helper functions
-- [ ] Integration tests with mock KeePass
-- [ ] Test coverage > 70%
-
-**Estimated Time:** 12-16 hours
-
-### 1.1.5 CI/CD
-
-**Tasks:**
-- [ ] GitHub Actions workflow
-- [ ] Automated tests on PR
-- [ ] PHPStan static analysis
-- [ ] Release automation
-
-**Estimated Time:** 4-6 hours
+**Target:** Q2-Q3 2026
 
 ---
 
-## Version 2.0 - FUTURE
+## Backlog
 
-**Goal:** Major refactoring and expansion
+**v1.2 Features to Create Issues For:**
+- [ ] feat-list-command - List all projects with backups in KeePass - Priority: Medium
+- [ ] feat-diff-command - Compare local .env with KeePass version - Priority: Medium
+- [ ] test-coverage - Expand test coverage for all commands - Priority: High
+- [ ] dist-composer - Publish to Packagist as global composer package - Priority: Medium
+- [ ] improve-ci - Set up GitHub Actions CI/CD - Priority: Medium
 
-**Estimated Time:** 4-6 weeks
-
-### 2.1 Refactor to PSR-4
-
-**Tasks:**
-- [ ] Split into multiple classes
-- [ ] Proper namespacing
-- [ ] Dependency injection
-- [ ] Command pattern for subcommands
-
-### 2.2 Composer Package
-
-**Tasks:**
-- [ ] Publish to Packagist
-- [ ] `composer global require local/kpenv`
-- [ ] Semantic versioning
-- [ ] Changelog
-
-### 2.3 Plugin System
-
-**Tasks:**
-- [ ] Backend interface
-- [ ] 1Password plugin
-- [ ] Bitwarden plugin
-- [ ] HashiCorp Vault plugin
-
-### 2.4 GUI Wrapper
-
-**Tasks:**
-- [ ] Evaluate Electron vs Tauri
-- [ ] Project list UI
-- [ ] One-click backup/restore
-- [ ] System tray integration
+**v2.0 Ideas & Explorations:**
+- PSR-4 refactor strategy (separate concerns into classes)
+- Plugin architecture design for other password managers
+- Native package building (deb, rpm, brew formula)
+- GUI wrapper feasibility study
 
 ---
 
-## Documentation
+## Completed Milestones
 
-- [x] README.md with usage examples
-- [x] LICENSE (MIT)
-- [x] composer.json
-- [x] PRD
-- [x] Implementation plan (this file)
-- [x] Planning Framework
-- [ ] Session log
-- [ ] Decisions log
-- [ ] API documentation (v2.0)
+### ✅ Version 1.0: Core Functionality
+**Completed:** ~2025-11
+**Summary:** Initial release with sync/backup/restore, multi-environment support, safe restore mode
 
----
+**Features:**
+- Core sync/backup/restore functionality
+- Multi-environment support (dev/staging/prod)
+- Interactive prompts for user input
+- Safe restore mode (.env.fetched if exists)
+- Auto project detection from directory structure
 
-## Next Steps
+### ✅ Version 1.1: Distribution & Configuration
+**Completed:** ~2025-11
+**Summary:** Installation scripts, configuration system, project initialization
 
-### For v1.1 Development:
-
-1. Create GitHub repository
-2. Set up PHPUnit
-3. Write tests for existing functionality
-4. Implement `list` command
-5. Implement `diff` command
-6. Add config file support
-7. Set up CI/CD
-
-### For Immediate Use:
-
-Tool is production-ready! Use as-is:
-```bash
-./kpenv sync-example
-./kpenv backup-env
-./kpenv restore-env
-```
+**Features:**
+- Installation scripts (install.sh, install.ps1) for Linux/macOS/Windows
+- JSON-based configuration system (user & project configs)
+- `kpenv init` command for project setup
+- Auto .gitignore management
+- Smart project name detection (git/directory)
+- Global PATH installation
+- Shell completions (bash, zsh)
 
 ---
 
-**Last Updated:** 2025-11-05
-**Status:** v1.0 complete and stable ✅
+## Project Health
+
+**Current State:**
+- Open Issues: 0
+- In Progress: 0
+- Blocked: 0
+- Closed Issues: 0 (pre-v2.0 work not tracked in issue system)
+
+**Velocity:**
+- Just migrated to Planning Framework v2.0
+- Velocity will be tracked starting with v1.2 work
+
+**Tech Debt:**
+- [ ] Monolithic `kpenv` file - needs PSR-4 refactoring (planned for v2.0)
+- [ ] Limited test coverage - expand in v1.2
+- [ ] No static analysis (phpstan) - add in v1.2
+- [ ] No automated CI/CD - add in v1.2
+
+---
+
+## Dependencies & Blockers
+
+**External Dependencies:**
+| Dependency | Status | Impact | Notes |
+|------------|--------|--------|-------|
+| [Library/API] | ✅ Available | Medium | [Notes] |
+| [Tool/Service] | ⏸️ Pending | High | [Blocker details] |
+
+**Cross-Issue Blockers:**
+- Issue [X] blocks Issue [Y] - [Reason]
+
+---
+
+## Notes
+
+**Architecture Overview:**
+Single-executable PHP script (`kpenv`) containing all logic. Classes: Config, KeePassXCService, EnvFileManager, GitIgnoreManager, ProjectDetector. See CLAUDE.md for detailed architecture.
+
+**Key Patterns:**
+- Configuration hierarchy: CLI args > env vars > project config > user config > defaults
+- KeePass storage: Project entries with environment as sub-entries, .env content in Notes field
+- Safe operations: Never overwrite existing .env (creates .env.fetched instead)
+- Project detection: Multi-level fallback chain from explicit config to directory inference
+
+**Important Links:**
+- README.md - User documentation and usage examples
+- DISTRIBUTION_STRATEGY.md - Detailed distribution planning
+- CLAUDE.md - Developer guide and architecture details
+- docs/prd.md - Original product requirements
+
+---
+
+## How to Use This File
+
+**For AI Agents:**
+1. Read this file at session start to understand current focus
+2. Check "Active Issues" to see what's being worked on
+3. Check "Quick Status" for immediate context
+4. See roadmap for upcoming work
+
+**When to Update:**
+1. When closing an issue (mark it complete, remove from active)
+2. When creating new issues (add to appropriate milestone)
+3. When milestones change (update status, targets)
+4. When priorities shift (update backlog)
+
+**Keep This File Small:**
+- High-level roadmap only
+- Execution details go in issue folders
+- Closed issues referenced, not detailed here
+
+---
+
+**Version:** 2.0
+**Last Updated:** 2026-02-02
