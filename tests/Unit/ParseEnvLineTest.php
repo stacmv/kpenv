@@ -220,3 +220,74 @@ test('handles mixed language inline comments', function () {
         ->and($result['value'])->toBe('app')
         ->and($result['hasQuotes'])->toBeTrue();
 });
+
+// New tests for inline_comment extraction
+test('extracts inline comment from unquoted value', function () {
+    $result = parse_env_line('DEBUG=false # Enable debug mode');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('DEBUG')
+        ->and($result['value'])->toBe('false')
+        ->and($result['inline_comment'])->toBe('Enable debug mode');
+});
+
+test('extracts inline comment from double-quoted value', function () {
+    $result = parse_env_line('REDIS_KEY_PREFIX="janware" # Разделитель пространств имен - ":"');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('REDIS_KEY_PREFIX')
+        ->and($result['value'])->toBe('janware')
+        ->and($result['inline_comment'])->toBe('Разделитель пространств имен - ":"');
+});
+
+test('extracts inline comment from single-quoted value', function () {
+    $result = parse_env_line("DATABASE_HOST='localhost' # Host Name");
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('DATABASE_HOST')
+        ->and($result['value'])->toBe('localhost')
+        ->and($result['inline_comment'])->toBe('Host Name');
+});
+
+test('returns null inline_comment when no comment present', function () {
+    $result = parse_env_line('KEY=value');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('KEY')
+        ->and($result['value'])->toBe('value')
+        ->and($result['inline_comment'])->toBeNull();
+});
+
+test('handles inline comment with hash symbols in comment text', function () {
+    $result = parse_env_line('TAG=v1.0 # Version #1 release');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('TAG')
+        ->and($result['value'])->toBe('v1.0')
+        ->and($result['inline_comment'])->toBe('Version #1 release');
+});
+
+test('does not extract inline comment from hash in value', function () {
+    $result = parse_env_line('TAG=#hashtag');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('TAG')
+        ->and($result['value'])->toBe('#hashtag')
+        ->and($result['inline_comment'])->toBeNull();
+});
+
+test('handles hash inside quoted value with inline comment', function () {
+    $result = parse_env_line('PASSWORD="my#pass" # User password');
+
+    expect($result)->toBeArray()
+        ->and($result['type'])->toBe('variable')
+        ->and($result['key'])->toBe('PASSWORD')
+        ->and($result['value'])->toBe('my#pass')
+        ->and($result['inline_comment'])->toBe('User password');
+});
