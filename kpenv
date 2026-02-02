@@ -507,6 +507,7 @@ function parse_env_line(string $line): ?array {
     if (strpos($line, '=') !== false) {
         list($key, $valuePart) = explode('=', $line, 2);
         $key = trim($key);
+        $originalValuePart = $valuePart; // Keep original for comment detection
         $valuePart = ltrim($valuePart); // Only left trim to preserve structure
 
         $hasQuotes = false;
@@ -551,11 +552,17 @@ function parse_env_line(string $line): ?array {
             }
         } else {
             // No quotes - strip inline comments and extract them
-            // Look for # preceded by whitespace
-            if (preg_match('/^([^#]*?)\s+#\s*(.+)$/', $valuePart, $matches)) {
+            // Check original (before ltrim) to detect empty value with comment
+            if (preg_match('/^\s+#\s*(.+)$/', $originalValuePart, $matches)) {
+                // Empty value with comment (only whitespace before # in original)
+                $value = '';
+                $inlineComment = trim($matches[1]);
+            } elseif (preg_match('/^([^#]+?)\s+#\s*(.+)$/', $valuePart, $matches)) {
+                // Value with inline comment (must have space before #)
                 $value = rtrim($matches[1]);
                 $inlineComment = trim($matches[2]);
             } else {
+                // No inline comment (includes cases like #hashtag)
                 $value = rtrim($valuePart);
             }
         }
