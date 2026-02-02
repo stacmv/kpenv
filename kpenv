@@ -491,7 +491,7 @@ function parse_env_file(string $filePath): array {
 }
 
 function parse_env_line(string $line): ?array {
-    // Parse a line and return [key, value, hasQuotes, lineType]
+    // Parse a line and return [key, value, hasQuotes, lineType, inline_comment]
     // lineType: 'variable', 'comment', 'empty'
 
     $trimmed = trim($line);
@@ -507,11 +507,13 @@ function parse_env_line(string $line): ?array {
     if (strpos($line, '=') !== false) {
         list($key, $valuePart) = explode('=', $line, 2);
         $key = trim($key);
+        $originalValuePart = $valuePart; // Keep original for comment detection
         $valuePart = ltrim($valuePart); // Only left trim to preserve structure
 
         $hasQuotes = false;
         $quoteChar = null;
         $value = '';
+        $inlineComment = null;
 
         // Check if value starts with a quote
         if (strlen($valuePart) > 0 && ($valuePart[0] === '"' || $valuePart[0] === "'")) {
@@ -537,17 +539,30 @@ function parse_env_line(string $line): ?array {
                 if ($valuePart[$pos] === $quoteChar) {
                     // Found closing quote
                     $value = substr($valuePart, 1, $pos - 1);
+
+                    // Check for inline comment after closing quote
+                    $afterQuote = substr($valuePart, $pos + 1);
+                    if (preg_match('/\s*#\s*(.+)$/', $afterQuote, $matches)) {
+                        $inlineComment = trim($matches[1]);
+                    }
                     break;
                 }
 
                 $pos++;
             }
         } else {
-            // No quotes - strip inline comments
-            // Look for # preceded by whitespace
-            if (preg_match('/^([^#]*?)\s+#/', $valuePart, $matches)) {
+            // No quotes - strip inline comments and extract them
+            // Check original (before ltrim) to detect empty value with comment
+            if (preg_match('/^\s+#\s*(.+)$/', $originalValuePart, $matches)) {
+                // Empty value with comment (only whitespace before # in original)
+                $value = '';
+                $inlineComment = trim($matches[1]);
+            } elseif (preg_match('/^([^#]+?)\s+#\s*(.+)$/', $valuePart, $matches)) {
+                // Value with inline comment (must have space before #)
                 $value = rtrim($matches[1]);
+                $inlineComment = trim($matches[2]);
             } else {
+                // No inline comment (includes cases like #hashtag)
                 $value = rtrim($valuePart);
             }
         }
@@ -558,6 +573,7 @@ function parse_env_line(string $line): ?array {
             'value' => $value,
             'hasQuotes' => $hasQuotes,
             'quoteChar' => $quoteChar ?: '"',
+            'inline_comment' => $inlineComment,
             'line' => $line
         ];
     }
@@ -605,6 +621,9 @@ function sync_example_locally(Config $config, string $env): void {
         $outputLines = file($envFile, FILE_IGNORE_NEW_LINES);
     }
 
+    // Track pending comments to display before next variable
+    $pendingComments = [];
+
     // Process example file
     foreach ($exampleLines as $line) {
         $parsed = parse_env_line($line);
@@ -614,8 +633,20 @@ function sync_example_locally(Config $config, string $env): void {
             continue;
         }
 
-        if ($parsed['type'] === 'comment' || $parsed['type'] === 'empty') {
-            // If .env doesn't exist yet, include comments and empty lines
+        if ($parsed['type'] === 'comment') {
+            // Accumulate comment for next variable
+            $pendingComments[] = $parsed['line'];
+            // If .env doesn't exist yet, include comments
+            if (!$envExists) {
+                $outputLines[] = $line;
+            }
+            continue;
+        }
+
+        if ($parsed['type'] === 'empty') {
+            // Empty line resets pending comments (comment block ended)
+            $pendingComments = [];
+            // If .env doesn't exist yet, include empty lines
             if (!$envExists) {
                 $outputLines[] = $line;
             }
@@ -627,11 +658,26 @@ function sync_example_locally(Config $config, string $env): void {
 
             // Check if this key already exists in local .env
             if (isset($localVars[$key])) {
-                // Key exists, skip
+                // Key exists, skip (and clear pending comments)
+                $pendingComments = [];
                 continue;
             }
 
             // Key doesn't exist, prompt user
+            // First, display any accumulated comments
+            if (!empty($pendingComments)) {
+                echo "\n";
+                foreach ($pendingComments as $comment) {
+                    echo $comment . "\n";
+                }
+                $pendingComments = [];
+            }
+
+            // Display inline comment if present
+            if (isset($parsed['inline_comment']) && $parsed['inline_comment'] !== null) {
+                echo "# " . $parsed['inline_comment'] . "\n";
+            }
+
             $defaultValue = $parsed['value'];
             if ($defaultValue !== '') {
                 echo "New key '$key' found. Enter value (default: $defaultValue): ";
@@ -672,6 +718,49 @@ function sync_example_locally(Config $config, string $env): void {
     // Write the result
     file_put_contents($envFile, implode("\n", $outputLines) . "\n");
     echo "Sync completed. $addedCount keys added to $envFile.\n";
+
+    // If changes were made, prompt to backup to KeePass
+    if ($addedCount > 0) {
+        echo "\nWould you like to backup $envFile to KeePass now? [Y/n]: ";
+        $answer = trim(fgets(STDIN));
+
+        if ($answer === '' || strtolower($answer) === 'y' || strtolower($answer) === 'yes') {
+            echo "\n";
+
+            // Get project name
+            $projectName = get_project_name($config);
+            if (!$projectName) {
+                echo "Error: Could not determine project name. Please run 'kpenv backup-env' manually.\n";
+                return;
+            }
+
+            // Get KeePass password
+            $password = getenv('KEEPASS_PASSWORD');
+            if (!$password) {
+                echo "KeePass database password: ";
+                system('stty -echo 2>/dev/null');
+                $password = trim(fgets(STDIN));
+                system('stty echo 2>/dev/null');
+                echo "\n";
+            }
+
+            if (empty($password)) {
+                echo "Error: Password is required. You can backup later with: kpenv backup-env\n";
+                return;
+            }
+
+            // Create KeePass service and backup
+            try {
+                $kp = new KeePassXCService($config->get('keepass_db'), $password);
+                backup_env_to_keepass($kp, $projectName, $env, $config);
+            } catch (Exception $e) {
+                echo "Error during backup: " . $e->getMessage() . "\n";
+                echo "You can try again with: kpenv backup-env\n";
+            }
+        } else {
+            echo "Skipped backup. You can backup later with: kpenv backup-env\n";
+        }
+    }
 }
 
 function backup_env_to_keepass(KeePassXCService $kp, string $project, string $env, Config $config): void
