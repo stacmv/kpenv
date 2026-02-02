@@ -9,23 +9,26 @@
 
 ## Quick Status
 
-**Current Milestone:** Version 1.1 (Stable)
-**Current Focus:** Planning v1.2 features
-**Progress:** 100% - v1.1 complete
+**Current Milestone:** Version 1.2 (Started)
+**Current Focus:** Improving sync-example UX
+**Progress:** 5% - First issue opened
 
 **Active Issues:**
-- None currently open
+- [20260202-improve-sync-example-hints](../issues/open/20260202-improve-sync-example-hints/) - Show comment hints and backup prompt
 
 ---
 
 ## Roadmap
 
-### Milestone 1: Version 1.2 (Next)
+### Milestone 1: Version 1.2 (Current)
 **Goal:** Add utility commands and enhanced testing for better usability and reliability
 
-**Status:** ⏸️ Not Started
+**Status:** 🔄 In Progress
 
-**Planned Work:**
+**Active Issues:**
+- [ ] [20260202-improve-sync-example-hints](../issues/open/20260202-improve-sync-example-hints/) - Improve sync-example UX
+
+**Planned Issues:**
 - List all backed-up projects (`list` command)
 - Diff local vs KeePass (`diff` command)
 - PHPUnit/Pest test suite expansion
@@ -34,7 +37,7 @@
 
 **Target:** Q1 2026
 
-**Progress:** 0/5 planned features
+**Progress:** 1/6 features started
 
 ---
 
