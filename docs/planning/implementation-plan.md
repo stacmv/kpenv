@@ -9,12 +9,12 @@
 
 ## Quick Status
 
-**Current Milestone:** Version 1.2 (Started)
-**Current Focus:** Improving sync-example UX
-**Progress:** 5% - First issue opened
+**Current Milestone:** Version 1.2 (In Progress)
+**Current Focus:** Expanding features and testing
+**Progress:** 17% - First feature complete (1/6)
 
 **Active Issues:**
-- [20260202-improve-sync-example-hints](../issues/open/20260202-improve-sync-example-hints/) - Show comment hints and backup prompt
+- None currently
 
 ---
 
@@ -25,8 +25,8 @@
 
 **Status:** 🔄 In Progress
 
-**Active Issues:**
-- [ ] [20260202-improve-sync-example-hints](../issues/open/20260202-improve-sync-example-hints/) - Improve sync-example UX
+**Completed Issues:**
+- [x] [20260202-improve-sync-example-hints](../issues/closed/20260202-improve-sync-example-hints/) - Improved sync-example with comment hints and backup prompt
 
 **Planned Issues:**
 - List all backed-up projects (`list` command)
@@ -37,7 +37,7 @@
 
 **Target:** Q1 2026
 
-**Progress:** 1/6 features started
+**Progress:** 1/6 features complete
 
 ---
 
@@ -111,11 +111,11 @@
 - Open Issues: 0
 - In Progress: 0
 - Blocked: 0
-- Closed Issues: 0 (pre-v2.0 work not tracked in issue system)
+- Closed Issues: 1
 
 **Velocity:**
-- Just migrated to Planning Framework v2.0
-- Velocity will be tracked starting with v1.2 work
+- Issues per session: ~1
+- First issue completed in single session (3 hours)
 
 **Tech Debt:**
 - [ ] Monolithic `kpenv` file - needs PSR-4 refactoring (planned for v2.0)
