@@ -4,7 +4,18 @@
 
 set -e
 
+# Get the absolute path to kpenv in the project directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KPENV_PATH="$SCRIPT_DIR/kpenv"
+
+if [ ! -f "$KPENV_PATH" ]; then
+    echo "Error: kpenv not found at $KPENV_PATH"
+    exit 1
+fi
+
 echo "=== Manual Test for sync-example improvements ==="
+echo ""
+echo "Using kpenv from: $KPENV_PATH"
 echo ""
 
 # Create test directory
@@ -84,12 +95,14 @@ echo "     Would you like to backup .env to KeePass now? [Y/n]:"
 echo ""
 echo "=== Running kpenv sync-example ==="
 echo ""
+echo "Using kpenv from project directory: $KPENV_PATH"
+echo ""
 echo "Press Enter to continue..."
 read
 
-# Run sync-example
+# Run sync-example using kpenv from project directory
 # Note: This will prompt for values - just press Enter to use defaults
-kpenv sync-example
+"$KPENV_PATH" sync-example
 
 echo ""
 echo "=== Verification ==="
