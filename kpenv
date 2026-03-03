@@ -157,9 +157,26 @@ class KeePassXCService
         $this->dbPath = $dbPath;
         $this->password = $password;
 
-        $this->cliPath = trim(shell_exec('command -v keepassxc-cli'));
-        if (empty($this->cliPath) || !is_executable($this->cliPath)) {
-            throw new Exception("KeePassXC-CLI executable not found or not executable.");
+        // Cross-platform executable detection
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        if ($isWindows) {
+            // On Windows, use 'where' command
+            $this->cliPath = trim(shell_exec('where keepassxc-cli 2>nul') ?? '');
+            if (empty($this->cliPath)) {
+                $this->cliPath = trim(shell_exec('where keepassxc-cli.exe 2>nul') ?? '');
+            }
+        } else {
+            // On Unix/Linux, use 'command -v'
+            $this->cliPath = trim(shell_exec('command -v keepassxc-cli 2>/dev/null') ?? '');
+        }
+
+        if (empty($this->cliPath)) {
+            throw new Exception("KeePassXC-CLI executable not found in PATH.");
+        }
+
+        // Verify it's executable (may not work on Windows, so we skip the check there)
+        if (!$isWindows && !is_executable($this->cliPath)) {
+            throw new Exception("KeePassXC-CLI found but is not executable.");
         }
 
         if (!file_exists($this->dbPath)) {
