@@ -10,11 +10,11 @@
 
 **kpenv** is a command-line tool for managing `.env` files using KeePassXC as a secure backend. It allows you to:
 
-- 🔄 Sync `.env.example` to `.env` with interactive prompts
-- 💾 Backup `.env` files to KeePass entry notes
-- 📥 Restore `.env` files from KeePass
-- 🔐 Secure storage without committing secrets to git
-- 🌍 Multi-environment support (development, staging, production)
+- Sync `.env.example` to `.env` with interactive prompts
+- Backup `.env` files to KeePass entry notes
+- Restore `.env` files from KeePass
+- Secure storage without committing secrets to git
+- Multi-environment support (development, staging, production)
 
 **Perfect for:**
 - Teams sharing environment configurations securely
@@ -26,17 +26,17 @@
 
 ## Features
 
-✅ **Easy Installation** - One-command installation script
-✅ **Project Initialization** - `kpenv init` sets up projects automatically
-✅ **Auto .gitignore** - Ensures `.env` files are never committed
-✅ **Flexible Configuration** - User and project-level JSON configs
-✅ **Sync from Example** - Interactively create `.env` from example files
-✅ **Backup to KeePass** - Store environment files in KeePass database notes
-✅ **Restore from KeePass** - Retrieve environment files on new machines
-✅ **Auto Project Detection** - Smart project name detection from git/path
-✅ **Multi-Environment** - Support for development, staging, production
-✅ **Secure** - Password never stored, read from stdin or env var
-✅ **Safe Restore** - Creates `.env.fetched` if local `.env` exists
+[OK]**Easy Installation** - One-command installation script
+[OK]**Project Initialization** - `kpenv init` sets up projects automatically
+[OK]**Auto .gitignore** - Ensures `.env` files are never committed
+[OK]**Flexible Configuration** - User and project-level JSON configs
+[OK]**Sync from Example** - Interactively create `.env` from example files
+[OK]**Backup to KeePass** - Store environment files in KeePass database notes
+[OK]**Restore from KeePass** - Retrieve environment files on new machines
+[OK]**Auto Project Detection** - Smart project name detection from git/path
+[OK]**Multi-Environment** - Support for development, staging, production
+[OK]**Secure** - Password never stored, read from stdin or env var
+[OK]**Safe Restore** - Creates `.env.fetched` if local `.env` exists
 
 ---
 
@@ -62,11 +62,11 @@ cd env-manager
 ```
 
 The installer will:
-- ✅ Check PHP 8.2+ is installed
-- ✅ Check for KeePassXC CLI
-- ✅ Install `kpenv` to `/usr/local/bin`
-- ✅ Create `~/.kpenv/config.json` with defaults
-- ✅ Make kpenv globally available
+- [OK]Check PHP 8.2+ is installed
+- [OK]Check for KeePassXC CLI
+- [OK]Install `kpenv` to `/usr/local/bin`
+- [OK]Create `~/.kpenv/config.json` with defaults
+- [OK]Make kpenv globally available
 
 **Windows:**
 
@@ -85,13 +85,13 @@ cd env-manager
 ```
 
 The Windows installer will:
-- ✅ Check Scoop is installed (required for dependency management)
-- ✅ Offer to install PHP 8.2+ via Scoop if not found
-- ✅ Offer to install KeePassXC via Scoop if not found
-- ✅ Offer to install Cmder (Unix-like shell) via Scoop if no bash found
-- ✅ Install `kpenv` to user directory with PATH access
-- ✅ Create `%USERPROFILE%\.kpenv\config.json` with defaults
-- ✅ Make kpenv globally available
+- [OK]Check Scoop is installed (required for dependency management)
+- [OK]Offer to install PHP 8.2+ via Scoop if not found
+- [OK]Offer to install KeePassXC via Scoop if not found
+- [OK]Offer to install Cmder (Unix-like shell) via Scoop if no bash found
+- [OK]Install `kpenv` to user directory with PATH access
+- [OK]Create `%USERPROFILE%\.kpenv\config.json` with defaults
+- [OK]Make kpenv globally available
 
 **Note for Windows users:** kpenv works best in Unix-like environments (Git Bash, MSYS2, WSL, Cmder). The installer can optionally install Cmder for you.
 
@@ -138,40 +138,16 @@ EOF
 
 #### Setting Up Your KeePass Database
 
-After installation, you need a KeePass database file before using `backup-env` or `restore-env`:
+kpenv will guide you through database setup automatically:
 
-**Step 1: Create/Locate your .kdbx database file**
-- Open KeePassXC application
-- Create a new database (File → New Database) or open existing
-- Save it to a location:
-  - `C:\Users\YourUsername\Documents\work-secrets.kdbx` (Windows)
-  - `/Users/username/Documents/work-secrets.kdbx` (macOS)
-  - `/home/username/Documents/work-secrets.kdbx` (Linux)
+- On **first run** of `kpenv init`, you'll be prompted to enter or create a database
+- When running `backup-env` or `restore-env` without a valid database, kpenv offers an interactive menu to locate or create one
+- All paths are saved to `~/.kpenv/config.json` automatically — no manual file editing needed
 
-**Step 2: Update kpenv configuration**
-
-Edit your user config file:
-- **Windows:** `C:\Users\YourUsername\.kpenv\config.json`
-- **macOS/Linux:** `~/.kpenv/config.json`
-
-Update the `keepass_db` setting with the **FULL PATH** to your database file:
-
-```json
-{
-  "keepass_db": "C:\\Users\\YourUsername\\Documents\\work-secrets.kdbx"
-}
-```
-
-**Important:** `keepass_db` must be a complete path including the filename and `.kdbx` extension, not just a folder.
-
-**Step 3: Test the configuration**
-
-Run any command that requires the database:
+You can also set the database path via environment variable:
 ```bash
-kpenv backup-env
+KPENV_DB=/path/to/your/database.kdbx kpenv backup-env
 ```
-
-If the database is not found, kpenv will prompt you to provide the correct path or create one.
 
 ### Shell Completion
 
@@ -231,39 +207,39 @@ kpenv init
 ```
 
 This command will:
-- ✅ Detect your project name from git or directory
-- ✅ Find `.env.example` or other example files
-- ✅ Check if `.env` is in `.gitignore` (and add it if not)
-- ✅ Create `.kpenv.json` project configuration
-- ✅ Optionally sync `.env.example` to `.env`
+- [OK]Detect your project name from git or directory
+- [OK]Find `.env.example` or other example files
+- [OK]Check if `.env` is in `.gitignore` (and add it if not)
+- [OK]Create `.kpenv.json` project configuration
+- [OK]Optionally sync `.env.example` to `.env`
 
 **Example:**
 ```
 $ cd my-project
 $ kpenv init
 
-🔧 Initializing kpenv in current project...
+[SETUP] Initializing kpenv in current project...
 
 Project detected: my-project
 Current directory: /home/user/dev/my-project
 
-✓ Found .env.example
-✓ .env does not exist (will be created)
-✓ KeePass database: /home/user/Documents/work-secrets.kdbx
-✓ keepassxc-cli found
+[OK] Found .env.example
+[OK] .env does not exist (will be created)
+[OK] KeePass database: /home/user/Documents/work-secrets.kdbx
+[OK] keepassxc-cli found
 
 Checking .gitignore...
-⚠ .env not found in .gitignore
+[WARN] .env not found in .gitignore
 
 Add .env to .gitignore? [Y/n]: y
-✓ Added .env to .gitignore
+[OK] Added .env to .gitignore
 
 Create .kpenv.json config? [Y/n]: y
-✓ Created .kpenv.json
+[OK] Created .kpenv.json
 
 Sync .env.example to .env now? [Y/n]: y
 
-✅ Project initialized successfully!
+[OK] Project initialized successfully!
 ```
 
 #### 1. Sync from Example
@@ -523,20 +499,20 @@ KeePass entry: my-awesome-project/development
 
 ## Security Considerations
 
-✅ **Password Handling**
+[OK]**Password Handling**
 - Never stored in code or config
 - Read from stdin (hidden input) or `KEEPASS_PASSWORD` env var
 - Passed to `keepassxc-cli` via stdin
 
-✅ **KeePass Database**
+[OK]**KeePass Database**
 - Encrypted with master password
 - Supports key files and hardware keys (via KeePassXC)
 
-✅ **Safe Restore**
+[OK]**Safe Restore**
 - Won't overwrite existing `.env` files
 - Creates `.env.fetched` for manual review
 
-⚠️ **Best Practices**
+[WARN]**Best Practices**
 - Don't commit `.env` files to git (add to `.gitignore`)
 - Use strong KeePass master password
 - Regularly backup your KeePass database
@@ -587,7 +563,7 @@ $baseDevFolder = "/home/username/dev";
 
 ## Roadmap
 
-### Version 1.0 (Complete ✅)
+### Version 1.0 (Complete)
 - [x] Core sync/backup/restore functionality
 - [x] Multi-environment support
 - [x] Interactive prompts
@@ -661,4 +637,4 @@ Extracted to standalone tool: 2025-11-05
 
 ---
 
-**Made with ❤️ and AI assistance**
+**Made with AI assistance**

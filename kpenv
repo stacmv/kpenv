@@ -41,16 +41,16 @@ class Config
         $config = self::DEFAULTS;
 
         // Apply default paths if not set
-        $homeDir = getenv('HOME') ?: '/root';
+        $homeDir = get_home_dir();
         if ($config['base_dev_folder'] === null) {
-            $config['base_dev_folder'] = $homeDir . '/dev';
+            $config['base_dev_folder'] = $homeDir . DIRECTORY_SEPARATOR . 'dev';
         }
         if ($config['keepass_db'] === null) {
-            $config['keepass_db'] = $homeDir . '/Documents/work-secrets.kdbx';
+            $config['keepass_db'] = $homeDir . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'work-secrets.kdbx';
         }
 
         // Load user config (~/.kpenv/config.json)
-        $userConfigPath = $homeDir . '/.kpenv/config.json';
+        $userConfigPath = $homeDir . DIRECTORY_SEPARATOR . '.kpenv' . DIRECTORY_SEPARATOR . 'config.json';
         if (file_exists($userConfigPath)) {
             $userConfig = json_decode(file_get_contents($userConfigPath), true);
             if (is_array($userConfig)) {
@@ -93,11 +93,29 @@ class Config
         return $this->config;
     }
 
+    public function saveUserConfig(): bool
+    {
+        $homeDir = get_home_dir();
+        $configDir = $homeDir . DIRECTORY_SEPARATOR . '.kpenv';
+        $configFile = $configDir . DIRECTORY_SEPARATOR . 'config.json';
+
+        // Create directory if it doesn't exist
+        if (!is_dir($configDir)) {
+            if (!mkdir($configDir, 0755, true)) {
+                return false;
+            }
+        }
+
+        // Save config with pretty formatting
+        $json = json_encode($this->config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return file_put_contents($configFile, $json) !== false;
+    }
+
     public static function createUserConfig(): bool
     {
-        $homeDir = getenv('HOME') ?: '/root';
-        $configDir = $homeDir . '/.kpenv';
-        $configFile = $configDir . '/config.json';
+        $homeDir = get_home_dir();
+        $configDir = $homeDir . DIRECTORY_SEPARATOR . '.kpenv';
+        $configFile = $configDir . DIRECTORY_SEPARATOR . 'config.json';
 
         // Create directory if it doesn't exist
         if (!is_dir($configDir)) {
@@ -112,8 +130,8 @@ class Config
         }
 
         $defaultConfig = [
-            'base_dev_folder' => $homeDir . '/dev',
-            'keepass_db' => $homeDir . '/Documents/work-secrets.kdbx',
+            'base_dev_folder' => $homeDir . DIRECTORY_SEPARATOR . 'dev',
+            'keepass_db' => $homeDir . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'work-secrets.kdbx',
             'default_env' => 'development',
             'example_files' => ['.env.example', 'env.example', '.env.dist', 'example.env'],
             'auto_gitignore' => true,
@@ -154,28 +172,17 @@ class KeePassXCService
 
     public function __construct(string $dbPath, string $password)
     {
-        $this->dbPath = $dbPath;
+        $this->dbPath = normalize_path($dbPath);
         $this->password = $password;
 
-        // Cross-platform executable detection
-        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        if ($isWindows) {
-            // On Windows, use 'where' command
-            $this->cliPath = trim(shell_exec('where keepassxc-cli 2>nul') ?? '');
-            if (empty($this->cliPath)) {
-                $this->cliPath = trim(shell_exec('where keepassxc-cli.exe 2>nul') ?? '');
-            }
-        } else {
-            // On Unix/Linux, use 'command -v'
-            $this->cliPath = trim(shell_exec('command -v keepassxc-cli 2>/dev/null') ?? '');
-        }
+        $this->cliPath = find_cli('keepassxc-cli');
 
         if (empty($this->cliPath)) {
             throw new Exception("KeePassXC-CLI executable not found in PATH.");
         }
 
-        // Verify it's executable (may not work on Windows, so we skip the check there)
-        if (!$isWindows && !is_executable($this->cliPath)) {
+        // Verify it's executable (skip on Windows where is_executable is unreliable)
+        if (!is_windows() && !is_executable($this->cliPath)) {
             throw new Exception("KeePassXC-CLI found but is not executable.");
         }
 
@@ -255,6 +262,67 @@ class KeePassXCService
 }
 
 /**
+ * Check if running on Windows
+ */
+function is_windows(): bool
+{
+    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+}
+
+/**
+ * Get the user's home directory cross-platform
+ */
+function get_home_dir(): string
+{
+    $home = getenv('HOME');
+    if ($home !== false && $home !== '') {
+        return rtrim($home, '/\\');
+    }
+
+    $userProfile = getenv('USERPROFILE');
+    if ($userProfile !== false && $userProfile !== '') {
+        return rtrim($userProfile, '/\\');
+    }
+
+    $homeDrive = getenv('HOMEDRIVE');
+    $homePath = getenv('HOMEPATH');
+    if ($homeDrive !== false && $homePath !== false && $homeDrive !== '' && $homePath !== '') {
+        return rtrim($homeDrive . $homePath, '/\\');
+    }
+
+    return is_windows() ? 'C:\\Users\\default' : '/root';
+}
+
+/**
+ * Normalize path separators to the platform's native separator
+ */
+function normalize_path(string $path): string
+{
+    return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+}
+
+/**
+ * Find an executable cross-platform
+ */
+function find_cli(string $name): string
+{
+    if (is_windows()) {
+        $path = trim(shell_exec("where $name 2>nul") ?? '');
+        if (empty($path)) {
+            $path = trim(shell_exec("where $name.exe 2>nul") ?? '');
+        }
+        // 'where' may return multiple lines; take the first
+        if (!empty($path)) {
+            $path = explode("\n", $path)[0];
+            $path = trim($path);
+        }
+        return $path;
+    }
+
+    return trim(shell_exec("command -v $name 2>/dev/null") ?? '');
+}
+
+/**
  * Read password from user input in a cross-platform way
  * On Unix: hides input using stty
  * On Windows: reads input normally (hiding is harder on Windows CLI)
@@ -266,31 +334,89 @@ function read_password(string $prompt = ''): string
         fflush(STDOUT);
     }
 
-    // Check if we're on Windows
-    $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-
-    if (!$isWindows) {
+    if (!is_windows()) {
         // Unix/Linux: use stty to hide input
-        $password = trim(shell_exec('stty -echo; read password; stty echo; echo $password'));
+        system('stty -echo');
+        $password = trim(fgets(STDIN) ?: '');
+        system('stty echo');
         echo "\n";
         return $password;
     }
 
-    // Windows: Use PowerShell if available to read securely
-    $password = '';
-    if (function_exists('stream_select') && function_exists('fgets')) {
-        // Disable Windows console input echo via shell_exec with mode command
-        $handle = fopen('php://stdin', 'r');
-        if ($handle) {
-            // Try to disable echo on Windows
-            @shell_exec('mode con: /HELP >nul 2>&1 && mode con /HELP >nul 2>&1');
-            $password = fgets($handle);
-            fclose($handle);
-            echo "\n";
+    // Windows: read from stdin (echo hiding not reliably available)
+    $password = trim(fgets(STDIN) ?: '');
+    echo "\n";
+    return $password;
+}
+
+/**
+ * Create a new KeePass database file using keepassxc-cli
+ */
+function create_keepass_database(string $dbPath): bool
+{
+    $cliPath = find_cli('keepassxc-cli');
+    if (empty($cliPath)) {
+        echo "[ERROR] keepassxc-cli not found. Install KeePassXC first.\n";
+        return false;
+    }
+
+    // Prompt for password
+    $password = read_password("New database password: ");
+    if (empty($password)) {
+        echo "[ERROR] Password cannot be empty.\n";
+        return false;
+    }
+
+    $confirm = read_password("Confirm password: ");
+    if ($password !== $confirm) {
+        echo "[ERROR] Passwords do not match.\n";
+        return false;
+    }
+
+    // Create parent directory if needed
+    $parentDir = dirname($dbPath);
+    if (!is_dir($parentDir)) {
+        if (!mkdir($parentDir, 0755, true)) {
+            echo "[ERROR] Could not create directory: $parentDir\n";
+            return false;
         }
     }
 
-    return trim($password ?? '');
+    // Run keepassxc-cli db-create
+    $descriptorSpec = [
+        0 => ["pipe", "r"],
+        1 => ["pipe", "w"],
+        2 => ["pipe", "w"],
+    ];
+
+    $command = [$cliPath, 'db-create', '-p', $dbPath];
+    $process = proc_open($command, $descriptorSpec, $pipes);
+
+    if (!is_resource($process)) {
+        echo "[ERROR] Failed to run keepassxc-cli.\n";
+        return false;
+    }
+
+    // keepassxc-cli db-create -p prompts for password on stdin
+    fwrite($pipes[0], $password . "\n");
+    fwrite($pipes[0], $password . "\n");
+    fclose($pipes[0]);
+
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    $exitCode = proc_close($process);
+
+    if ($exitCode !== 0) {
+        echo "[ERROR] Failed to create database: " . trim($stderr) . "\n";
+        return false;
+    }
+
+    echo "[OK] Database created at: $dbPath\n";
+    return true;
 }
 
 /**
@@ -298,56 +424,82 @@ function read_password(string $prompt = ''): string
  */
 function verify_keepass_database(Config $config): bool
 {
-    $dbPath = $config->get('keepass_db');
+    $dbPath = normalize_path($config->get('keepass_db'));
 
-    // Normalize path for file_exists check (convert backslashes to forward slashes)
-    $checkPath = str_replace('\\', '/', $dbPath);
-
-    if (file_exists($dbPath) || file_exists($checkPath)) {
+    if (file_exists($dbPath)) {
         return true;
     }
 
-    echo "\n⚠️  KeePass database not found!\n\n";
-    echo "Expected location:\n";
-    echo "   {$dbPath}\n\n";
+    $homeDir = get_home_dir();
+    $defaultDbPath = $homeDir . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'secrets.kdbx';
 
-    echo "Where to find/create your database:\n";
-    echo "1. Open KeePassXC application\n";
-    echo "2. Create or open a database file (File > New/Open Database)\n";
-    echo "3. Save it to any location (e.g., Documents, Desktop, etc.)\n\n";
+    echo "\n[WARN] KeePass database not found at: $dbPath\n\n";
+    echo "What would you like to do?\n";
+    echo "  1. Enter path to an existing .kdbx database file\n";
+    echo "  2. Create a new database\n";
+    echo "  3. Cancel\n\n";
+    echo "Choice [1/2/3]: ";
 
-    echo "Configuration storage:\n";
-    echo "   User config:    C:\\Users\\Stac\\.kpenv\\config.json\n";
-    echo "   Project config: .kpenv.json (in your project directory)\n\n";
+    $choice = trim(fgets(STDIN) ?: '');
 
-    echo "How to specify database path:\n";
-    echo "   FULL PATH required - include drive letter and .kdbx filename\n";
-    echo "   Examples:\n";
-    echo "     C:\\Users\\Stac\\Documents\\secrets.kdbx\n";
-    echo "     C:\\Users\\Stac\\Desktop\\my-passwords.kdbx\n";
-    echo "     D:\\backup\\work-database.kdbx\n\n";
+    switch ($choice) {
+        case '1':
+            echo "Enter FULL PATH to .kdbx file: ";
+            $input = trim(fgets(STDIN) ?: '');
 
-    echo "Enter FULL PATH to existing .kdbx database file (or press Enter to skip): ";
-    $input = trim(fgets(STDIN));
+            if (empty($input)) {
+                echo "[ERROR] No path provided.\n";
+                return false;
+            }
 
-    if (!empty($input)) {
-        // Validate it's a .kdbx file
-        if (strtolower(substr($input, -5)) !== '.kdbx') {
-            echo "⚠️  Warning: File does not end with .kdbx extension\n";
-        }
+            $input = normalize_path($input);
 
-        if (file_exists($input)) {
-            echo "✓ Database found!\n";
+            if (strtolower(substr($input, -5)) !== '.kdbx') {
+                echo "[WARN] File does not end with .kdbx extension.\n";
+            }
+
+            if (!file_exists($input)) {
+                echo "[ERROR] Database not found at: $input\n";
+                return false;
+            }
+
+            echo "[OK] Database found!\n";
             $config->set('keepass_db', $input);
+            $config->saveUserConfig();
+            echo "[OK] Configuration saved.\n";
             return true;
-        } else {
-            echo "✗ Database not found at: {$input}\n";
-            echo "   Please verify the path is correct and the file exists.\n";
-            return false;
-        }
-    }
 
-    return false;
+        case '2':
+            echo "Database path [$defaultDbPath]: ";
+            $input = trim(fgets(STDIN) ?: '');
+            $newDbPath = !empty($input) ? normalize_path($input) : $defaultDbPath;
+
+            if (strtolower(substr($newDbPath, -5)) !== '.kdbx') {
+                $newDbPath .= '.kdbx';
+            }
+
+            if (file_exists($newDbPath)) {
+                echo "[OK] Database already exists at: $newDbPath\n";
+                $config->set('keepass_db', $newDbPath);
+                $config->saveUserConfig();
+                echo "[OK] Configuration saved.\n";
+                return true;
+            }
+
+            if (!create_keepass_database($newDbPath)) {
+                return false;
+            }
+
+            $config->set('keepass_db', $newDbPath);
+            $config->saveUserConfig();
+            echo "[OK] Configuration saved.\n";
+            return true;
+
+        case '3':
+        default:
+            echo "Cancelled.\n";
+            return false;
+    }
 }
 
 function main(int $argc, array $argv): void
@@ -421,20 +573,89 @@ function main(int $argc, array $argv): void
     }
 }
 
+/**
+ * Interactive first-run setup when user config doesn't exist
+ */
+function setup_user_config(Config $config): void
+{
+    $homeDir = get_home_dir();
+    $configPath = $homeDir . DIRECTORY_SEPARATOR . '.kpenv' . DIRECTORY_SEPARATOR . 'config.json';
+
+    // Only run if config doesn't exist yet
+    if (file_exists($configPath)) {
+        return;
+    }
+
+    echo "=== First-time setup ===\n\n";
+
+    // KeePass database path
+    $defaultDb = $homeDir . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'work-secrets.kdbx';
+    echo "KeePass database file [$defaultDb]: ";
+    $input = trim(fgets(STDIN) ?: '');
+    $dbPath = !empty($input) ? normalize_path($input) : $defaultDb;
+
+    if (strtolower(substr($dbPath, -5)) !== '.kdbx') {
+        $dbPath .= '.kdbx';
+    }
+
+    if (file_exists($dbPath)) {
+        echo "[OK] Database found.\n";
+    } else {
+        echo "[WARN] Database not found at: $dbPath\n";
+        echo "Create it now? [Y/n]: ";
+        $answer = trim(fgets(STDIN) ?: '');
+        if (empty($answer) || strtolower($answer) === 'y') {
+            if (!create_keepass_database($dbPath)) {
+                echo "[WARN] Skipping database creation. You can set it up later.\n";
+            }
+        }
+    }
+
+    echo "\n";
+
+    // Base development folder
+    $defaultBase = $homeDir . DIRECTORY_SEPARATOR . 'dev';
+    echo "Base development folder [$defaultBase]: ";
+    $input = trim(fgets(STDIN) ?: '');
+    $baseFolder = !empty($input) ? normalize_path($input) : $defaultBase;
+
+    if (!is_dir($baseFolder)) {
+        if (mkdir($baseFolder, 0755, true)) {
+            echo "[OK] Created directory: $baseFolder\n";
+        } else {
+            echo "[WARN] Could not create directory: $baseFolder\n";
+        }
+    } else {
+        echo "[OK] Directory exists.\n";
+    }
+
+    echo "\n";
+
+    // Save config
+    $config->set('keepass_db', $dbPath);
+    $config->set('base_dev_folder', $baseFolder);
+    if ($config->saveUserConfig()) {
+        echo "[OK] Configuration saved to $configPath\n\n";
+    } else {
+        echo "[ERROR] Failed to save configuration.\n\n";
+    }
+}
+
 function init_project(Config $config): void
 {
-    echo "🔧 Initializing kpenv in current project...\n\n";
+    echo "[SETUP] Initializing kpenv in current project...\n\n";
 
-    // Ensure user config exists
-    Config::createUserConfig();
+    // First-time setup if no user config exists
+    setup_user_config($config);
 
     // Detect project name
     $currentDir = getcwd();
     $projectName = basename($currentDir);
 
     // Try to get better project name from git
+    $devNull = is_windows() ? 'nul' : '/dev/null';
     if (file_exists('.git') && is_dir('.git')) {
-        $gitRemote = trim(shell_exec('git remote get-url origin 2>/dev/null') ?: '');
+        $gitRemote = trim(shell_exec("git remote get-url origin 2>$devNull") ?: '');
         if (!empty($gitRemote)) {
             // Extract repo name from git URL
             if (preg_match('#/([^/]+?)(?:\.git)?$#', $gitRemote, $matches)) {
@@ -452,9 +673,9 @@ function init_project(Config $config): void
     $userInput = $userInput !== false ? trim($userInput) : '';
     if (!empty($userInput)) {
         $projectName = $userInput;
-        echo "✓ Using project name: $projectName\n";
+        echo "[OK] Using project name: $projectName\n";
     } else {
-        echo "✓ Using detected project name: $projectName\n";
+        echo "[OK] Using detected project name: $projectName\n";
     }
     echo "\n";
 
@@ -469,29 +690,29 @@ function init_project(Config $config): void
     }
 
     if ($exampleFile) {
-        echo "✓ Found $exampleFile\n";
+        echo "[OK]Found $exampleFile\n";
     } else {
-        echo "⚠ No example file found (tried: " . implode(', ', $exampleFiles) . ")\n";
+        echo "[WARN]No example file found (tried: " . implode(', ', $exampleFiles) . ")\n";
     }
 
     // Check if .env exists
     $envExists = file_exists('.env');
     if ($envExists) {
-        echo "✓ .env already exists\n";
+        echo "[OK].env already exists\n";
     } else {
-        echo "✓ .env does not exist (will be created)\n";
+        echo "[OK].env does not exist (will be created)\n";
     }
 
     // Check KeePass database
     $keepassDb = $config->get('keepass_db');
-    echo "✓ KeePass database: $keepassDb\n";
+    echo "[OK]KeePass database: $keepassDb\n";
 
     // Check keepassxc-cli
-    $cliPath = trim(shell_exec('command -v keepassxc-cli 2>/dev/null') ?: '');
+    $cliPath = find_cli('keepassxc-cli');
     if (empty($cliPath)) {
-        echo "⚠ Warning: keepassxc-cli not found. Install KeePassXC to use backup/restore features.\n";
+        echo "[WARN] keepassxc-cli not found. Install KeePassXC to use backup/restore features.\n";
     } else {
-        echo "✓ keepassxc-cli found: $cliPath\n";
+        echo "[OK] keepassxc-cli found: $cliPath\n";
     }
 
     echo "\n";
@@ -507,14 +728,14 @@ function init_project(Config $config): void
         $environments = array_map('trim', explode(',', $userInput));
         $environments = array_filter($environments); // Remove empty strings
         if (!empty($environments)) {
-            echo "✓ Using environments: " . implode(', ', $environments) . "\n";
+            echo "[OK]Using environments: " . implode(', ', $environments) . "\n";
         } else {
             $environments = $defaultEnvironments;
-            echo "✓ Using default environments: " . implode(', ', $environments) . "\n";
+            echo "[OK]Using default environments: " . implode(', ', $environments) . "\n";
         }
     } else {
         $environments = $defaultEnvironments;
-        echo "✓ Using default environments: " . implode(', ', $environments) . "\n";
+        echo "[OK]Using default environments: " . implode(', ', $environments) . "\n";
     }
     echo "\n";
 
@@ -527,13 +748,13 @@ function init_project(Config $config): void
             $gitignoreContent = file_get_contents('.gitignore');
             // Check if .env is already in gitignore
             if (preg_match('/^\.env$/m', $gitignoreContent) || preg_match('/^\/\.env$/m', $gitignoreContent)) {
-                echo "✓ .env already in .gitignore\n";
+                echo "[OK].env already in .gitignore\n";
                 $gitignoreNeedsUpdate = false;
             }
         }
 
         if ($gitignoreNeedsUpdate) {
-            echo "⚠ .env not found in .gitignore\n\n";
+            echo "[WARN].env not found in .gitignore\n\n";
             echo "Add .env to .gitignore? [Y/n]: ";
             $answer = fgets(STDIN);
             $answer = $answer !== false ? trim($answer) : '';
@@ -545,7 +766,7 @@ function init_project(Config $config): void
                 }
                 $gitignoreContent .= "# Environment files\n.env\n.env.*\n!.env.example\n";
                 file_put_contents('.gitignore', $gitignoreContent);
-                echo "✓ Added .env to .gitignore\n";
+                echo "[OK]Added .env to .gitignore\n";
             }
         }
     }
@@ -558,9 +779,9 @@ function init_project(Config $config): void
     $answer = $answer !== false ? trim($answer) : '';
     if (empty($answer) || strtolower($answer) === 'y') {
         if (Config::createProjectConfig($projectName, $environments, $exampleFile)) {
-            echo "✓ Created .kpenv.json\n";
+            echo "[OK]Created .kpenv.json\n";
         } else {
-            echo "⚠ .kpenv.json already exists\n";
+            echo "[WARN].kpenv.json already exists\n";
         }
     }
 
@@ -577,7 +798,7 @@ function init_project(Config $config): void
         }
     }
 
-    echo "\n✅ Project initialized successfully!\n\n";
+    echo "\n[OK] Project initialized successfully!\n\n";
     echo "Next steps:\n";
     if ($envExists) {
         echo "  1. Review your .env file\n";
@@ -854,11 +1075,7 @@ function sync_example_locally(Config $config, string $env): void {
             // Get KeePass password
             $password = getenv('KEEPASS_PASSWORD');
             if (!$password) {
-                echo "KeePass database password: ";
-                system('stty -echo 2>/dev/null');
-                $password = trim(fgets(STDIN));
-                system('stty echo 2>/dev/null');
-                echo "\n";
+                $password = read_password("KeePass database password: ");
             }
 
             if (empty($password)) {
@@ -944,8 +1161,9 @@ function get_project_name(Config $config): ?string
     }
 
     // Try git remote
+    $devNull = is_windows() ? 'nul' : '/dev/null';
     if (file_exists('.git') && is_dir('.git')) {
-        $gitRemote = trim(shell_exec('git remote get-url origin 2>/dev/null') ?: '');
+        $gitRemote = trim(shell_exec("git remote get-url origin 2>$devNull") ?: '');
         if (!empty($gitRemote)) {
             if (preg_match('#/([^/]+?)(?:\.git)?$#', $gitRemote, $matches)) {
                 return $matches[1];
