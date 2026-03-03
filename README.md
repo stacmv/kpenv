@@ -136,6 +136,43 @@ EOF
 .\uninstall.ps1
 ```
 
+#### Setting Up Your KeePass Database
+
+After installation, you need a KeePass database file before using `backup-env` or `restore-env`:
+
+**Step 1: Create/Locate your .kdbx database file**
+- Open KeePassXC application
+- Create a new database (File → New Database) or open existing
+- Save it to a location:
+  - `C:\Users\YourUsername\Documents\work-secrets.kdbx` (Windows)
+  - `/Users/username/Documents/work-secrets.kdbx` (macOS)
+  - `/home/username/Documents/work-secrets.kdbx` (Linux)
+
+**Step 2: Update kpenv configuration**
+
+Edit your user config file:
+- **Windows:** `C:\Users\YourUsername\.kpenv\config.json`
+- **macOS/Linux:** `~/.kpenv/config.json`
+
+Update the `keepass_db` setting with the **FULL PATH** to your database file:
+
+```json
+{
+  "keepass_db": "C:\\Users\\YourUsername\\Documents\\work-secrets.kdbx"
+}
+```
+
+**Important:** `keepass_db` must be a complete path including the filename and `.kdbx` extension, not just a folder.
+
+**Step 3: Test the configuration**
+
+Run any command that requires the database:
+```bash
+kpenv backup-env
+```
+
+If the database is not found, kpenv will prompt you to provide the correct path or create one.
+
 ### Shell Completion
 
 The installer automatically sets up shell completions. For manual setup:
@@ -320,8 +357,11 @@ Location: `~/.kpenv/config.json`
 ```
 
 **Options:**
-- `base_dev_folder` - Base directory for project detection
-- `keepass_db` - Path to KeePass database file
+- `base_dev_folder` - Base directory for project detection (folder path)
+- `keepass_db` - **FULL PATH** to KeePass database file (must include `.kdbx` filename)
+  - Example: `C:\Users\username\Documents\secrets.kdbx` (Windows)
+  - Example: `/Users/username/Documents/secrets.kdbx` (macOS)
+  - Example: `/home/username/Documents/secrets.kdbx` (Linux)
 - `default_env` - Default environment name (development, staging, production)
 - `example_files` - List of example file names to search for (in order)
 - `auto_gitignore` - Automatically add `.env` to `.gitignore` during init

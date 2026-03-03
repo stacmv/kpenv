@@ -307,22 +307,42 @@ function verify_keepass_database(Config $config): bool
         return true;
     }
 
-    echo "\n⚠️  KeePass database not found at:\n";
+    echo "\n⚠️  KeePass database not found!\n\n";
+    echo "Expected location:\n";
     echo "   {$dbPath}\n\n";
-    echo "Options:\n";
-    echo "1. Create a new KeePass database (open KeePassXC and create one at the path above)\n";
-    echo "2. Specify a different database path\n\n";
 
-    echo "Enter path to existing database (or press Enter to skip): ";
+    echo "Where to find/create your database:\n";
+    echo "1. Open KeePassXC application\n";
+    echo "2. Create or open a database file (File > New/Open Database)\n";
+    echo "3. Save it to any location (e.g., Documents, Desktop, etc.)\n\n";
+
+    echo "Configuration storage:\n";
+    echo "   User config:    C:\\Users\\Stac\\.kpenv\\config.json\n";
+    echo "   Project config: .kpenv.json (in your project directory)\n\n";
+
+    echo "How to specify database path:\n";
+    echo "   FULL PATH required - include drive letter and .kdbx filename\n";
+    echo "   Examples:\n";
+    echo "     C:\\Users\\Stac\\Documents\\secrets.kdbx\n";
+    echo "     C:\\Users\\Stac\\Desktop\\my-passwords.kdbx\n";
+    echo "     D:\\backup\\work-database.kdbx\n\n";
+
+    echo "Enter FULL PATH to existing .kdbx database file (or press Enter to skip): ";
     $input = trim(fgets(STDIN));
 
     if (!empty($input)) {
-        $config->set('keepass_db', $input);
+        // Validate it's a .kdbx file
+        if (strtolower(substr($input, -5)) !== '.kdbx') {
+            echo "⚠️  Warning: File does not end with .kdbx extension\n";
+        }
+
         if (file_exists($input)) {
             echo "✓ Database found!\n";
+            $config->set('keepass_db', $input);
             return true;
         } else {
             echo "✗ Database not found at: {$input}\n";
+            echo "   Please verify the path is correct and the file exists.\n";
             return false;
         }
     }
