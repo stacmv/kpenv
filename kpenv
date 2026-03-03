@@ -293,6 +293,43 @@ function read_password(string $prompt = ''): string
     return trim($password ?? '');
 }
 
+/**
+ * Verify KeePass database exists and prompt user if it doesn't
+ */
+function verify_keepass_database(Config $config): bool
+{
+    $dbPath = $config->get('keepass_db');
+
+    // Normalize path for file_exists check (convert backslashes to forward slashes)
+    $checkPath = str_replace('\\', '/', $dbPath);
+
+    if (file_exists($dbPath) || file_exists($checkPath)) {
+        return true;
+    }
+
+    echo "\n⚠️  KeePass database not found at:\n";
+    echo "   {$dbPath}\n\n";
+    echo "Options:\n";
+    echo "1. Create a new KeePass database (open KeePassXC and create one at the path above)\n";
+    echo "2. Specify a different database path\n\n";
+
+    echo "Enter path to existing database (or press Enter to skip): ";
+    $input = trim(fgets(STDIN));
+
+    if (!empty($input)) {
+        $config->set('keepass_db', $input);
+        if (file_exists($input)) {
+            echo "✓ Database found!\n";
+            return true;
+        } else {
+            echo "✗ Database not found at: {$input}\n";
+            return false;
+        }
+    }
+
+    return false;
+}
+
 function main(int $argc, array $argv): void
 {
     $config = new Config();
@@ -320,6 +357,12 @@ function main(int $argc, array $argv): void
             if ($projectName === null) {
                 echo "Error: Could not determine project name from current directory.\n";
                 echo "Run 'kpenv init' to set up this project.\n";
+                exit(1);
+            }
+
+            // Verify KeePass database exists
+            if (!verify_keepass_database($config)) {
+                echo "Error: Cannot proceed without a valid KeePass database.\n";
                 exit(1);
             }
 
