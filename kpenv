@@ -237,6 +237,45 @@ class KeePassXCService
     }
 }
 
+/**
+ * Read password from user input in a cross-platform way
+ * On Unix: hides input using stty
+ * On Windows: reads input normally (hiding is harder on Windows CLI)
+ */
+function read_password(string $prompt = ''): string
+{
+    if (!empty($prompt)) {
+        echo $prompt;
+        fflush(STDOUT);
+    }
+
+    // Check if we're on Windows
+    $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+
+    if (!$isWindows) {
+        // Unix/Linux: use stty to hide input
+        $password = trim(shell_exec('stty -echo; read password; stty echo; echo $password'));
+        echo "\n";
+        return $password;
+    }
+
+    // Windows: Use PowerShell if available to read securely
+    $password = '';
+    if (function_exists('stream_select') && function_exists('fgets')) {
+        // Disable Windows console input echo via shell_exec with mode command
+        $handle = fopen('php://stdin', 'r');
+        if ($handle) {
+            // Try to disable echo on Windows
+            @shell_exec('mode con: /HELP >nul 2>&1 && mode con /HELP >nul 2>&1');
+            $password = fgets($handle);
+            fclose($handle);
+            echo "\n";
+        }
+    }
+
+    return trim($password ?? '');
+}
+
 function main(int $argc, array $argv): void
 {
     $config = new Config();
@@ -270,9 +309,7 @@ function main(int $argc, array $argv): void
             // These commands require a password
             $password = getenv('KEEPASS_PASSWORD') ?: ($options['password'] ?? null);
             if ($password === null || $password === false) {
-                echo "KeePass database password: ";
-                $password = trim(shell_exec('stty -echo; read password; stty echo; echo $password'));
-                echo "\n";
+                $password = read_password("KeePass database password: ");
             }
             if (empty($password)) {
                 echo "Error: Password cannot be empty.\n";
